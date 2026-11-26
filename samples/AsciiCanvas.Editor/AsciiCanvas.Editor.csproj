@@ -3,6 +3,11 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <RootNamespace>AsciiCanvas.Editor</RootNamespace>
+    <!--
+      No ICU: .NET does not load libicu (Linux) or icu.dll (Windows), so the published editor has one fewer system
+      dependency. The editor uses only ordinal comparisons and invariant formatting, so nothing it shows changes.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <!--

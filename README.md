@@ -71,6 +71,8 @@ dotnet publish samples/AsciiCanvas.Editor -c Release -r win-x64 -p:IncludeNative
 
 With the second form the DLLs must stay in the same folder as the executable (on macOS and Linux they are `.dylib` and `.so` files).
 
+The editor is built with `InvariantGlobalization`, so it does not use ICU (the `libicu` package on Linux, `icu.dll` on Windows). Nothing in the editor or the library depends on culture rules: Avalonia brings its own Unicode data and HarfBuzz does the text shaping. On Linux the executable still needs glibc (or a `linux-musl-x64` build), the X11 libraries and fontconfig, which a desktop system already has. Only Windows has been tried.
+
 ### Structure
 
 The text logic (`EditorModel`, `TextBuffer`, `FileBrowserModel`, `TextFile`, `MenuBar`) knows nothing about the screen, so it is unit tested on its own. `EditorView` draws the text, `Tui/` holds the menu loop, dialogs and file dialog, and `EditorApp` connects them to the canvas input.
