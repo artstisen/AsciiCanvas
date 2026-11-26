@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+Thumbs.db
+desktop.ini
+
+# Claude Code local (per-user) settings
+.claude/settings.local.json

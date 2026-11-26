@@ -1,0 +1,30 @@
+# AsciiCanvas
+
+A grid of character cells for building ASCII user interfaces in .NET 10 / C# 14. It is not a terminal emulator:
+there are no escape sequences or processes, just a canvas programs draw on and an input stream they read from.
+
+| Project | Purpose |
+|---|---|
+| `src/AsciiCanvas.Core` | UI-independent model: `CellCanvas` (drawing, cursor, input queue), `TextTerminal` (console-like output and `ReadLineAsync`), colors, box drawing, layout math |
+| `src/AsciiCanvas.Avalonia` | `CanvasView` control and `CanvasApp` (one-call window host) built on Avalonia |
+| `samples/AsciiCanvas.Demo` | Demo with colors, boxes, a terminal, mouse paint and Unicode screens |
+| `tests/AsciiCanvas.Core.Tests` | xUnit tests for the core |
+
+```csharp
+CanvasApp.Run(async canvas =>
+{
+    canvas.Box(canvas.Bounds, BoxStyle.Double, title: "Hello");
+    canvas.Write(2, 2, "Press a key", new CellStyle(CellColor.BrightGreen));
+    canvas.Present();
+
+    await canvas.Input.ReadAsync();
+});
+```
+
+* **Drawing** goes to a back buffer; `Present()` publishes it, so partial frames are never shown. All members are thread-safe.
+* **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `MouseEvent` (cell coordinates) and `ResizeEvent`.
+* **Scaling**: `CanvasSizing.ScaleToFit` keeps the column/row count and scales cells and font; `CanvasSizing.FillWithCells` keeps the cell size and changes the column/row count (the program receives a `ResizeEvent`). Use `canvas.Resize(columns, rows)` to change the grid size from the program.
+* **Colors** are the 16/256 palette (`CellColor`), mapped to RGB by a `ColorPalette` (`Campbell` by default).
+* **Text**: one rune per cell; East Asian wide characters and emoji take two cells. Box-drawing and block characters are painted procedurally, so they join without gaps at any scale.
+
+Run the demo with `dotnet run --project samples/AsciiCanvas.Demo` (add `-- --fill` for fixed cell size).

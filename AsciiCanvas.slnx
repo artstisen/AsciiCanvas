@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/AsciiCanvas.Demo/AsciiCanvas.Demo.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/AsciiCanvas.Avalonia/AsciiCanvas.Avalonia.csproj" />
+    <Project Path="src/AsciiCanvas.Core/AsciiCanvas.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AsciiCanvas.Core.Tests/AsciiCanvas.Core.Tests.csproj" />
+  </Folder>
+</Solution>
