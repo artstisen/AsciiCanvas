@@ -1,0 +1,92 @@
+using System.Runtime.ExceptionServices;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+
+namespace AsciiCanvas.Avalonia;
+
+/// <summary>The Avalonia application behind <see cref="CanvasApp"/>: one window showing a canvas, and the program running against it.</summary>
+internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, CanvasAppOptions options) : Application
+{
+    private static readonly TimeSpan _programShutdownTimeout = TimeSpan.FromSeconds(2);
+
+    private CellCanvas? _canvas;
+    private Task? _programTask;
+    private ExceptionDispatchInfo? _failure;
+
+    public override void Initialize() => Styles.Add(new FluentTheme());
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var canvas = new CellCanvas(options.Columns, options.Rows);
+            var view = new CanvasView
+            {
+                Canvas = canvas,
+                Sizing = options.Sizing,
+                PreserveAspectRatio = options.PreserveAspectRatio,
+                FontSize = options.FontSize,
+                Palette = options.Palette,
+            };
+
+            if (options.FontFamily is { } family)
+            {
+                view.FontFamily = family;
+            }
+
+            var window = new Window
+            {
+                Title = options.Title,
+                Content = view,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                Background = new SolidColorBrush(Color.FromUInt32(0xFF000000 | options.Palette.DefaultBackground)),
+            };
+            window.Closed += (_, _) => canvas.Close();
+            desktop.MainWindow = window;
+
+            _canvas = canvas;
+
+            // The program is user code that may block, so it must not run on the UI thread.
+            _programTask = Task.Run(() => RunProgramAsync(canvas, window));
+        }
+
+        base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>Waits briefly for the program to notice that the window closed, releases the canvas and rethrows a failure of the program.</summary>
+    public void Shutdown()
+    {
+        // This is the synchronous end of CanvasApp.Run; the program was already told to stop through the canvas.
+        _programTask?.Wait(_programShutdownTimeout);
+        _canvas?.Dispose();
+        Volatile.Read(ref _failure)?.Throw();
+    }
+
+    private async Task RunProgramAsync(CellCanvas canvas, Window window)
+    {
+        var failed = false;
+        try
+        {
+            await program(canvas).ConfigureAwait(false);
+            canvas.Present();
+        }
+        catch (OperationCanceledException) when (canvas.Closed.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            // Outermost boundary of the program: the failure is rethrown from CanvasApp.Run after the window closes.
+            Volatile.Write(ref _failure, ExceptionDispatchInfo.Capture(ex));
+            failed = true;
+        }
+
+        if (failed || options.CloseWindowWhenProgramEnds)
+        {
+            Dispatcher.UIThread.Post(window.Close);
+        }
+    }
+}

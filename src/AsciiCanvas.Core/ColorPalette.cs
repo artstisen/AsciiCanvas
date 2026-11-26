@@ -5,6 +5,10 @@ public sealed class ColorPalette
 {
     private readonly uint[] _colors = new uint[256];
 
+    /// <summary>Creates a palette from the 16 standard colors; the cube and grayscale ramp are computed.</summary>
+    /// <param name="standardColors">Exactly 16 colors as 0xRRGGBB.</param>
+    /// <param name="defaultForeground">Color used for <see cref="CellColor.Default"/> as a foreground.</param>
+    /// <param name="defaultBackground">Color used for <see cref="CellColor.Default"/> as a background.</param>
     public ColorPalette(ReadOnlySpan<uint> standardColors, uint defaultForeground, uint defaultBackground)
     {
         if (standardColors.Length != 16)
@@ -22,25 +26,13 @@ public sealed class ColorPalette
 
         for (var i = 0; i < 24; i++)
         {
-            var v = 8 + 10 * i;
+            var v = 8 + (10 * i);
             _colors[232 + i] = Rgb(v, v, v);
         }
 
         DefaultForeground = defaultForeground;
         DefaultBackground = defaultBackground;
     }
-
-    public uint DefaultForeground { get; }
-
-    public uint DefaultBackground { get; }
-
-    /// <summary>Gets the 0xRRGGBB value for a palette index.</summary>
-    public uint this[int index] => _colors[index];
-
-    public uint Resolve(CellColor color, bool foreground) =>
-        color.IsDefault ? (foreground ? DefaultForeground : DefaultBackground) : _colors[color.Index];
-
-    private static uint Rgb(int r, int g, int b) => (uint)(r << 16 | g << 8 | b);
 
     /// <summary>Windows Terminal "Campbell" scheme.</summary>
     public static ColorPalette Campbell { get; } = new(
@@ -59,4 +51,22 @@ public sealed class ColorPalette
         ],
         defaultForeground: 0xE5E5E5,
         defaultBackground: 0x000000);
+
+    /// <summary>The 0xRRGGBB color used for <see cref="CellColor.Default"/> as a foreground.</summary>
+    public uint DefaultForeground { get; }
+
+    /// <summary>The 0xRRGGBB color used for <see cref="CellColor.Default"/> as a background.</summary>
+    public uint DefaultBackground { get; }
+
+    /// <summary>Gets the 0xRRGGBB value for a palette index (0-255).</summary>
+    /// <param name="index">The palette index.</param>
+    public uint this[int index] => _colors[index];
+
+    /// <summary>Gets the 0xRRGGBB value for a color, resolving <see cref="CellColor.Default"/> to the default foreground or background.</summary>
+    /// <param name="color">The color to resolve.</param>
+    /// <param name="foreground">True to resolve a default color as foreground, false as background.</param>
+    public uint Resolve(CellColor color, bool foreground) =>
+        color.IsDefault ? (foreground ? DefaultForeground : DefaultBackground) : _colors[color.Index];
+
+    private static uint Rgb(int r, int g, int b) => (uint)((r << 16) | (g << 8) | b);
 }

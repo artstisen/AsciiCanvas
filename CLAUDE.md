@@ -5,7 +5,7 @@
 
 ## Project context
 
-- **What it is:** A grid of character cells for building ASCII-based UIs. Not a terminal emulator: no escape sequences, no processes. Programs draw on a `CellCanvas` and read input from its `InputQueue`.
+- **What it is:** A grid of character cells for building ASCII-based UIs. Not a terminal emulator: no escape sequences, no processes. Programs draw on a `CellCanvas` and read input from its `CanvasInput`.
 - **Type:** Class libraries (`AsciiCanvas.Core`, `AsciiCanvas.Avalonia`) plus a demo app and tests.
 - **Target:** net10.0 / C# 14
 - **Architecture:** `Core` has no UI dependency (headless testable); `Avalonia` is a thin host (`CanvasView` control, `CanvasApp` window runner). Other hosts can be added next to it.
@@ -27,11 +27,18 @@ tests/
 
 ```powershell
 dotnet build
-dotnet test
+dotnet test                              # xUnit v3 runs on Microsoft.Testing.Platform (opted in via global.json)
 dotnet format --verify-no-changes
 dotnet list package --vulnerable --include-transitive
 dotnet run --project samples/AsciiCanvas.Demo
 ```
+
+## Style enforcement
+
+- `.editorconfig` turns the kit's style rules into build errors (`TreatWarningsAsErrors`, `EnforceCodeStyleInBuild`, `AnalysisLevel` latest-recommended). Fix the code instead of lowering a severity.
+- `dotnet format --verify-no-changes` also checks naming; run it before committing.
+- Packages are versioned in `Directory.Packages.props` only.
+- `Core` is `IsAotCompatible`: no unguarded reflection there.
 
 ## Project conventions and overrides
 

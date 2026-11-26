@@ -7,7 +7,7 @@ namespace AsciiCanvas;
 public static class CharWidth
 {
     // Sorted, non-overlapping inclusive ranges of double-width code points.
-    private static readonly (int Start, int End)[] WideRanges =
+    private static readonly (int Start, int End)[] _wideRanges =
     [
         (0x1100, 0x115F), (0x231A, 0x231B), (0x2329, 0x232A), (0x23E9, 0x23EC), (0x23F0, 0x23F0),
         (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615), (0x2648, 0x2653), (0x267F, 0x267F),
@@ -23,6 +23,9 @@ public static class CharWidth
         (0x20000, 0x2FFFD), (0x30000, 0x3FFFD),
     ];
 
+    /// <summary>Gets the number of columns a character occupies.</summary>
+    /// <param name="rune">The character.</param>
+    /// <returns>0 for control and combining characters, 2 for wide characters, otherwise 1.</returns>
     public static int Of(Rune rune)
     {
         var v = rune.Value;
@@ -48,9 +51,12 @@ public static class CharWidth
         return IsWide(v) ? 2 : 1;
     }
 
+    /// <summary>Gets the number of columns a UTF-16 character occupies.</summary>
+    /// <param name="c">The character.</param>
     public static int Of(char c) => Of(new Rune(c));
 
-    /// <summary>Total column width of a string.</summary>
+    /// <summary>Gets the total column width of a string.</summary>
+    /// <param name="text">The text to measure.</param>
     public static int Of(ReadOnlySpan<char> text)
     {
         var width = 0;
@@ -65,11 +71,11 @@ public static class CharWidth
     private static bool IsWide(int codePoint)
     {
         var lo = 0;
-        var hi = WideRanges.Length - 1;
+        var hi = _wideRanges.Length - 1;
         while (lo <= hi)
         {
             var mid = (lo + hi) >>> 1;
-            var (start, end) = WideRanges[mid];
+            var (start, end) = _wideRanges[mid];
             if (codePoint < start)
             {
                 hi = mid - 1;

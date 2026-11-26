@@ -41,6 +41,7 @@ internal static class InputMapping
         key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Enter or Key.Escape
         || (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) != 0;
 
+    /// <summary>Removes control characters from typed text; they arrive as key events instead.</summary>
     public static string FilterText(string? text)
     {
         if (string.IsNullOrEmpty(text))
@@ -48,7 +49,7 @@ internal static class InputMapping
             return "";
         }
 
-        return text.All(c => c >= 0x20 && c != 0x7F) ? text : new string(text.Where(c => c >= 0x20 && c != 0x7F).ToArray());
+        return text.All(IsPrintable) ? text : string.Concat(text.Where(IsPrintable));
     }
 
     public static MouseButton MapButton(PointerUpdateKind kind) => kind switch
@@ -58,4 +59,6 @@ internal static class InputMapping
         PointerUpdateKind.RightButtonPressed or PointerUpdateKind.RightButtonReleased => MouseButton.Right,
         _ => MouseButton.None,
     };
+
+    private static bool IsPrintable(char c) => c >= 0x20 && c != 0x7F;
 }
