@@ -125,18 +125,47 @@ public class TextTerminalTests
     }
 
     [Fact]
-    public async Task ReadLineAsync_PastedMultiLineText_InsertsTextWithLineBreaksAsSpaces()
+    public async Task ReadLineAsync_PastedMultiLineText_ReturnsOneLinePerRead()
     {
-        using var canvas = new CellCanvas(30, 3);
+        using var canvas = new CellCanvas(30, 5);
         var terminal = new TextTerminal(canvas);
+        var ct = TestContext.Current.CancellationToken;
         Type(canvas, "a");
         canvas.Input.Post(new PasteEvent("one\r\ntwo\nthree"));
         Type(canvas, "z");
         Press(canvas, Key.Enter);
 
-        var line = await terminal.ReadLineAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var first = await terminal.ReadLineAsync(cancellationToken: ct);
+        var second = await terminal.ReadLineAsync(cancellationToken: ct);
+        var third = await terminal.ReadLineAsync(cancellationToken: ct);
 
-        Assert.Equal("aone two threez", line);
+        Assert.Equal(("aone", "two", "threez"), (first, second, third));
+        Assert.False(terminal.KeyAvailable);
+    }
+
+    [Fact]
+    public async Task ReadKeyAsync_PastedLineBreaks_ArriveAsEnterKeys()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        var terminal = new TextTerminal(canvas);
+        var ct = TestContext.Current.CancellationToken;
+        canvas.Input.Post(new PasteEvent("ab\n\ncd\n"));
+
+        List<KeyPress> presses = [];
+        while (terminal.KeyAvailable)
+        {
+            presses.Add(await terminal.ReadKeyAsync(ct));
+        }
+
+        Assert.Equal(
+            [
+                new KeyPress(Key.Unknown, "ab", KeyModifiers.None),
+                new KeyPress(Key.Enter, "", KeyModifiers.None),
+                new KeyPress(Key.Enter, "", KeyModifiers.None),
+                new KeyPress(Key.Unknown, "cd", KeyModifiers.None),
+                new KeyPress(Key.Enter, "", KeyModifiers.None),
+            ],
+            presses);
     }
 
     [Fact]

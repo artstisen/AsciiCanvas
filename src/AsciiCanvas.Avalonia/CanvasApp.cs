@@ -7,6 +7,9 @@ namespace AsciiCanvas.Avalonia;
 /// <summary>Runs a program against a canvas in its own window.</summary>
 public static class CanvasApp
 {
+    /// <summary>The scrollback rows that <see cref="RunTerminal"/> keeps when <see cref="CanvasAppOptions.ScrollbackLines"/> is not set.</summary>
+    public const int DefaultTerminalScrollbackLines = 1000;
+
     /// <summary>
     /// Opens a window and runs <paramref name="program"/> on a background thread with the window's canvas.
     /// Blocks until the window closes. The program should stop when <see cref="CellCanvas.Closed"/> is canceled;
@@ -44,6 +47,7 @@ public static class CanvasApp
     /// <summary>
     /// Like <see cref="Run"/> but hands the program a console-like <see cref="TextTerminal"/>. The terminal is also attached to
     /// <see cref="TerminalConsole"/> while the program runs, so code that calls <c>Console</c> through an alias works unchanged.
+    /// Unless <see cref="CanvasAppOptions.ScrollbackLines"/> says otherwise, the window keeps <see cref="DefaultTerminalScrollbackLines"/> rows of scrollback.
     /// </summary>
     /// <param name="program">The program to run.</param>
     /// <param name="options">Window and canvas settings; defaults are used if <see langword="null"/>.</param>
@@ -55,6 +59,11 @@ public static class CanvasApp
         return Run(
             async canvas =>
             {
+                if (options?.ScrollbackLines is null)
+                {
+                    canvas.ScrollbackLimit = DefaultTerminalScrollbackLines;
+                }
+
                 var terminal = new TextTerminal(canvas);
                 TerminalConsole.Attach(terminal);
                 try

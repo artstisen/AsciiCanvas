@@ -66,6 +66,7 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
             };
             window.Closed += (_, _) => canvas.Close();
             canvas.Title = options.Title;
+            canvas.ScrollbackLimit = options.ScrollbackLines ?? 0;
             canvas.TitleChanged += title => Dispatcher.UIThread.Post(() => window.Title = title);
             canvas.Icon = options.Icon;
             canvas.IconChanged += () => Dispatcher.UIThread.Post(() => ApplyIcon(window, canvas.Icon));

@@ -171,6 +171,19 @@ Redraw();
   Redraw();
   ```
 
+- A program that works with console keys (a line editor ported from the console, for example) but reads `canvas.Input` itself can
+  turn each event into the keys `Console.ReadKey` would return, with `ConsoleKeyMap.FromInput(input)`. Typed text gives one key per
+  character, an action key gives one key, and a paste gives its characters with an `Enter` key for each line break, so pasted lines
+  arrive one by one. Mouse input, resizes and the key-down of printable keys (which also arrive as a `TextEvent`) give no keys:
+
+  ```csharp
+  var input = await canvas.Input.ReadAsync(canvas.Closed);
+  foreach (var key in ConsoleKeyMap.FromInput(input))
+  {
+      editor.HandleKey(key);   // a ConsoleKeyInfo, as from Console.ReadKey(true)
+  }
+  ```
+
 ### Closing
 
 By default the window closes when the user closes it, and `canvas.Closed` is canceled. To ask about unsaved changes first:
@@ -212,6 +225,7 @@ new CanvasAppOptions
     CloseWindowWhenProgramEnds = false,
     ShowDiagnostics = false,
     AllowDiagnosticsToggle = true,           // F3 shows frame times
+    ScrollbackLines = 1000,                  // rows kept for scrolling back; RunTerminal's default, 0 turns it off
 }
 ```
 
@@ -230,6 +244,28 @@ new CanvasAppOptions
 - **Fonts**: Cascadia Mono (default) and JetBrains Mono are embedded, so every platform looks the same. Any other
   monospaced `FontFamily` works.
 - **Diagnostics**: `ShowDiagnostics` draws the frame rate, render times and the grid size over the canvas, for testing.
+- **Scrollback**: see "Scrollback" below. `ScrollbackLines` sets `canvas.ScrollbackLimit` at start-up. Unset, `RunTerminal` keeps
+  `CanvasApp.DefaultTerminalScrollbackLines` (1000) rows and `Run` keeps none.
+
+## Scrollback
+
+With `canvas.ScrollbackLimit` above 0, the canvas keeps the rows that scroll off the top, and the user can scroll back to read them,
+as in a terminal:
+
+- **What is kept**: the rows that an upward `Scroll` of a full-width region starting at row 0 pushes off the top. `TextTerminal`
+  output that runs past the bottom does exactly that, so console-style programs get scrollback without doing anything. A program
+  with a status line at the bottom can scroll only the rows above it (`new CellRect(0, 0, canvas.Columns, canvas.Rows - 1)`) and
+  still feed the scrollback. Scrolling a region lower down, or not full width, keeps nothing. The oldest rows are dropped at the limit.
+- **Scrolling**: the mouse wheel (3 rows a notch) and Shift+PageUp/PageDown (a page) scroll the view. These then do not reach
+  the program: no wheel `MouseEvent`, no `KeyEvent` for Shift+PageUp/PageDown. Any other key, typed text or a paste brings the view
+  back to the bottom before the program gets it.
+- **While scrolled back**: new output does not move the view; it stays on the rows the user is reading. The cursor is hidden when it
+  is out of view. Mouse events still give the cell under the pointer on the screen, not in the history.
+- **For the program**: `ScrollbackCount` is the number of rows kept, `ScrollbackOffset` is how far the view is scrolled back (set it
+  to 0 to show the canvas, for example after a command), and `ClearScrollback()` empties it. Scrolling back changes only what the
+  host shows; drawing, `GetCell` and the cursor still work on the canvas itself.
+
+Leave scrollback off (the default for `Run`) in a full-screen program that uses the wheel or Shift+PageUp itself.
 
 ## Windows without a frame
 
@@ -313,6 +349,10 @@ return CanvasApp.RunTerminal(async terminal =>
 `terminal.Out` is a `TextWriter` for code that expects `Console.Out`, and `terminal.In` is a `TextReader` for `Console.In`
 (its `ReadLine` blocks until Enter, so use it from the program's thread). `terminal.Canvas` is the underlying canvas.
 
+A paste arrives as it does in a console. `ReadKeyAsync` returns the text of each pasted line with an `Enter` press for each line
+break. `ReadLineAsync` returns the first pasted line, and the following reads return the rest, one line each. `RunTerminal` turns on
+1000 rows of scrollback (see "Scrollback").
+
 ## Porting a console program
 
 A program that uses `Console` can move to a canvas window without changing its code. `TerminalConsole` has the same members as
@@ -355,7 +395,10 @@ What differs:
 - **A cursor position outside the window is moved to the nearest edge** instead of throwing.
 - **`Console.CancelKeyPress` does not exist.** Ctrl+C arrives as a key press (`ReadKey` returns `C` with Control). A program that
   uses the event must be changed. `TreatControlCAsInput` is accepted and ignored.
-- **No scrollback.** Lines that scroll off the top are gone.
+- **The scrollback belongs to the window.** Lines that scroll off the top can be read again with the mouse wheel or
+  Shift+PageUp, but `BufferHeight` is the window height and `WindowTop` is always 0. A program that needs Shift+PageUp or the wheel
+  itself sets `ScrollbackLines = 0`.
+- **Pasted lines arrive one by one**, as in a console: `ReadLine` returns one pasted line per call, and `ReadKey` returns `Enter` for each line break.
 - **A newline at the bottom of the window scrolls with the current background color**, as a real terminal does, so reset colors
   before the last `WriteLine` of a highlighted line.
 - **Redirection and encodings.** `IsOutputRedirected` and its relatives are always false, and `OutputEncoding` is accepted and ignored.

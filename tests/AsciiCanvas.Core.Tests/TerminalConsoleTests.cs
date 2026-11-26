@@ -151,6 +151,18 @@ public sealed class TerminalConsoleTests : IDisposable
         Assert.Equal("A", RowText(0));
     }
 
+    [Fact]
+    public void ReadKey_ForMultiLinePaste_ReturnsEnterForEachLineBreak()
+    {
+        _canvas.Input.Post(new PasteEvent("a\nb"));
+
+        var keys = new[] { TerminalConsole.ReadKey(true), TerminalConsole.ReadKey(true), TerminalConsole.ReadKey(true) };
+
+        Assert.Equal([ConsoleKey.A, ConsoleKey.Enter, ConsoleKey.B], keys.Select(k => k.Key));
+        Assert.Equal('\r', keys[1].KeyChar);
+        Assert.False(TerminalConsole.KeyAvailable);
+    }
+
     [Theory]
     [InlineData(Key.Up, ConsoleKey.UpArrow, '\0')]
     [InlineData(Key.Enter, ConsoleKey.Enter, '\r')]

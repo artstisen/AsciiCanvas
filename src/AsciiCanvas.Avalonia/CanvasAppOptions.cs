@@ -56,4 +56,24 @@ public sealed class CanvasAppOptions
 
     /// <summary>Turns Ctrl+V, Cmd+V and Shift+Insert into a <see cref="PasteEvent"/>. See <see cref="CanvasView.InterceptPasteShortcut"/>.</summary>
     public bool InterceptPasteShortcut { get; init; } = true;
+
+    /// <summary>
+    /// The most rows kept in the scrollback (<see cref="CellCanvas.ScrollbackLimit"/>); 0 turns it off. When not set,
+    /// <see cref="CanvasApp.RunTerminal"/> keeps <see cref="CanvasApp.DefaultTerminalScrollbackLines"/> rows and <see cref="CanvasApp.Run"/> none.
+    /// With scrollback on, the mouse wheel and Shift+PageUp/PageDown scroll the view instead of reaching the program.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+    public int? ScrollbackLines
+    {
+        get;
+        init
+        {
+            if (value is { } lines)
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(lines);
+            }
+
+            field = value;
+        }
+    }
 }

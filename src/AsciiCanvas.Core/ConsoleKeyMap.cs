@@ -1,9 +1,48 @@
 namespace AsciiCanvas;
 
-/// <summary>Turns the key presses of a <see cref="TextTerminal"/> into the <see cref="ConsoleKeyInfo"/> values that <c>Console.ReadKey</c> returns.</summary>
-internal static class ConsoleKeyMap
+/// <summary>
+/// Turns canvas input into the <see cref="ConsoleKeyInfo"/> values that <c>Console.ReadKey</c> returns. <see cref="TerminalConsole.ReadKey"/>
+/// uses it; a program that reads <see cref="CellCanvas.Input"/> itself can use <see cref="FromInput"/> to get the same keys.
+/// </summary>
+public static class ConsoleKeyMap
 {
+    /// <summary>
+    /// The console keys of one input event, in order, as <see cref="TerminalConsole.ReadKey"/> would return them: one key per character of
+    /// typed text, one key for an action key (arrow, Enter, F-key, Ctrl+letter...), and for a paste one key per character with
+    /// <see cref="ConsoleKey.Enter"/> for each line break. Mouse input, resizes and the key-down of printable keys (which also arrive as
+    /// a <see cref="TextEvent"/>) give no keys.
+    /// </summary>
+    /// <param name="input">The input event.</param>
+    /// <returns>The keys; empty if the event has none.</returns>
+    public static IReadOnlyList<ConsoleKeyInfo> FromInput(InputEvent input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        List<KeyPress> presses = [];
+        KeyPresses.Add(input, presses);
+        if (presses.Count == 0)
+        {
+            return [];
+        }
+
+        List<ConsoleKeyInfo> keys = [];
+        foreach (var press in presses)
+        {
+            if (press.IsText)
+            {
+                keys.AddRange(press.Text.Select(FromChar));
+            }
+            else
+            {
+                keys.Add(FromKeyPress(press));
+            }
+        }
+
+        return keys;
+    }
+
     /// <summary>Converts an action key (arrow, Enter, F-key, Ctrl+letter...) to a <see cref="ConsoleKeyInfo"/>.</summary>
+    /// <param name="press">The key press; its <see cref="KeyPress.Text"/> is ignored.</param>
+    /// <returns>The console key.</returns>
     public static ConsoleKeyInfo FromKeyPress(KeyPress press)
     {
         var shift = (press.Modifiers & KeyModifiers.Shift) != 0;
@@ -52,7 +91,9 @@ internal static class ConsoleKeyMap
         return new ConsoleKeyInfo(character, consoleKeyName, shift, alt, control);
     }
 
-    /// <summary>Converts a typed character to a <see cref="ConsoleKeyInfo"/>.</summary>
+    /// <summary>Converts a typed character to a <see cref="ConsoleKeyInfo"/>. A surrogate pair is two calls, one per half, as from the console.</summary>
+    /// <param name="character">The character.</param>
+    /// <returns>The console key.</returns>
     public static ConsoleKeyInfo FromChar(char character)
     {
         var key = character switch
@@ -61,6 +102,7 @@ internal static class ConsoleKeyMap
             >= 'A' and <= 'Z' => ConsoleKey.A + (character - 'A'),
             >= '0' and <= '9' => ConsoleKey.D0 + (character - '0'),
             ' ' => ConsoleKey.Spacebar,
+            '\t' => ConsoleKey.Tab,
             ',' => ConsoleKey.OemComma,
             '.' => ConsoleKey.OemPeriod,
             '-' => ConsoleKey.OemMinus,

@@ -18,8 +18,9 @@ namespace AsciiCanvas;
 /// </para>
 /// <para>
 /// Differences from the console: a cursor position outside the window is clamped instead of throwing, colors are the 16 console colors,
-/// ANSI escape sequences are not interpreted, <c>Console.CancelKeyPress</c> does not exist (Ctrl+C arrives as a key), and there is no
-/// scrollback. Only one thread should read at a time. The state is static, so one terminal is attached at a time.
+/// ANSI escape sequences are not interpreted, and <c>Console.CancelKeyPress</c> does not exist (Ctrl+C arrives as a key). The scrollback
+/// (<see cref="CellCanvas.ScrollbackLimit"/>) belongs to the window, so <see cref="BufferHeight"/> and <see cref="WindowTop"/> do not
+/// include it. Only one thread should read at a time. The state is static, so one terminal is attached at a time.
 /// </para>
 /// </summary>
 public static class TerminalConsole

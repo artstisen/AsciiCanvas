@@ -13,7 +13,10 @@ public sealed class TextTerminal(CellCanvas canvas)
     private const int TabSize = 8;
 
     private readonly List<string> _history = [];
-    private KeyPress? _pending;
+
+    // Key presses read from the input but not handed out yet; a paste becomes several.
+    private readonly List<KeyPress> _pending = [];
+    private int _pendingIndex;
     private int _column;
     private int _row;
     private int _scrolls;
@@ -69,7 +72,7 @@ public sealed class TextTerminal(CellCanvas canvas)
     {
         get
         {
-            while (_pending is null && Canvas.Input.TryRead(out var input))
+            while (_pendingIndex >= _pending.Count && Canvas.Input.TryRead(out var input))
             {
                 if (input is ResizeEvent)
                 {
@@ -77,11 +80,11 @@ public sealed class TextTerminal(CellCanvas canvas)
                 }
                 else
                 {
-                    _pending = Translate(input);
+                    Queue(input);
                 }
             }
 
-            return _pending is not null;
+            return _pendingIndex < _pending.Count;
         }
     }
 
@@ -164,7 +167,10 @@ public sealed class TextTerminal(CellCanvas canvas)
         }
     }
 
-    /// <summary>Waits for typed text or an action key. Mouse input and plain key-down events for printable keys are skipped.</summary>
+    /// <summary>
+    /// Waits for typed text or an action key. Mouse input and plain key-down events for printable keys are skipped.
+    /// A paste arrives as a console delivers it: the text of each line, with an <see cref="Key.Enter"/> press for each line break.
+    /// </summary>
     /// <param name="cancellationToken">Cancels the wait.</param>
     /// <exception cref="OperationCanceledException">The wait was canceled or the canvas was closed.</exception>
     public async ValueTask<KeyPress> ReadKeyAsync(CancellationToken cancellationToken = default)
@@ -180,6 +186,7 @@ public sealed class TextTerminal(CellCanvas canvas)
 
     /// <summary>
     /// Reads a line with basic editing (caret movement, Backspace/Delete, Home/End, history with Up/Down, Escape to clear).
+    /// When several lines are pasted, the first line break ends this line and the rest is kept for the next reads, one line each.
     /// </summary>
     /// <param name="prompt">Written before the editable text.</param>
     /// <param name="mask">If set, this character is echoed instead of what is typed (for passwords). The line is not added to history.</param>
@@ -276,34 +283,9 @@ public sealed class TextTerminal(CellCanvas canvas)
         }
     }
 
-    private static bool IsActionKey(KeyEvent e)
-    {
-        switch (e.Key)
-        {
-            case Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown
-                or Key.Insert or Key.Delete or Key.Enter or Key.Escape or Key.Back or Key.Tab:
-                return true;
-            case >= Key.F1 and <= Key.F12:
-                return true;
-            case (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9):
-                // Ctrl+Alt is how some layouts type AltGr characters, which arrive as text instead.
-                var command = (e.Modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-                var alt = (e.Modifiers & KeyModifiers.Alt) != 0;
-                return command != alt;
-            default:
-                return false;
-        }
-    }
-
     private async ValueTask<KeyPress?> ReadKeyOrResizeAsync(CancellationToken cancellationToken)
     {
-        if (_pending is { } waiting)
-        {
-            _pending = null;
-            return waiting;
-        }
-
-        while (true)
+        while (_pendingIndex >= _pending.Count)
         {
             var input = await Canvas.Input.ReadAsync(cancellationToken).ConfigureAwait(false);
             if (input is ResizeEvent)
@@ -312,24 +294,23 @@ public sealed class TextTerminal(CellCanvas canvas)
                 return null;
             }
 
-            if (Translate(input) is { } press)
-            {
-                return press;
-            }
-
-            // Mouse input and key presses that also arrive as text are skipped.
+            // Mouse input and key presses that also arrive as text add nothing, so the loop reads on.
+            Queue(input);
         }
+
+        return _pending[_pendingIndex++];
     }
 
-    private static KeyPress? Translate(InputEvent input) => input switch
+    private void Queue(InputEvent input)
     {
-        TextEvent text => new KeyPress(Key.Unknown, text.Text, KeyModifiers.None),
+        if (_pendingIndex >= _pending.Count)
+        {
+            _pending.Clear();
+            _pendingIndex = 0;
+        }
 
-        // A line editor has one line, so line breaks in pasted text become spaces.
-        PasteEvent { Text.Length: > 0 } paste => new KeyPress(Key.Unknown, paste.Text.ReplaceLineEndings(" "), KeyModifiers.None),
-        KeyEvent key when IsActionKey(key) => new KeyPress(key.Key, "", key.Modifiers),
-        _ => null,
-    };
+        KeyPresses.Add(input, _pending);
+    }
 
     private void WriteCore(ReadOnlySpan<char> text)
     {

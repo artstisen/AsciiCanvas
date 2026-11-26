@@ -16,6 +16,9 @@ public sealed class CanvasView : Control
     // The thickness in pixels of the band along each window edge that resizes a window without a frame.
     private const double ResizeGrip = 6;
 
+    // Rows of scrollback per wheel notch, the usual system default.
+    private const int WheelScrollbackLines = 3;
+
     /// <summary>Identifies <see cref="Canvas"/>.</summary>
     public static readonly StyledProperty<CellCanvas> CanvasProperty =
         AvaloniaProperty.Register<CanvasView, CellCanvas>(nameof(Canvas));
@@ -294,12 +297,22 @@ public sealed class CanvasView : Control
             return;
         }
 
+        if (Canvas.ScrollbackLimit > 0 && modifiers == KeyModifiers.Shift && key is Key.PageUp or Key.PageDown)
+        {
+            Canvas.ScrollbackOffset += key == Key.PageUp ? Canvas.Rows : -Canvas.Rows;
+            e.Handled = true;
+            return;
+        }
+
         if (InterceptPasteShortcut && InputMapping.IsPasteShortcut(key, modifiers))
         {
             e.Handled = true;
             PasteFromClipboard();
             return;
         }
+
+        // As in a terminal, typing brings the view back to where the input goes.
+        Canvas.ScrollbackOffset = 0;
         RestartBlink();
         Canvas.Input.Post(new KeyEvent(key, modifiers));
         if (InputMapping.ShouldHandle(key, modifiers))
@@ -315,6 +328,7 @@ public sealed class CanvasView : Control
         var text = InputMapping.FilterText(e.Text);
         if (text.Length > 0)
         {
+            Canvas.ScrollbackOffset = 0;
             RestartBlink();
             Canvas.Input.Post(new TextEvent(text));
             e.Handled = true;
@@ -391,7 +405,12 @@ public sealed class CanvasView : Control
             notches = Math.Sign(e.Delta.Y);
         }
 
-        if (notches != 0)
+        if (notches != 0 && Canvas.ScrollbackLimit > 0)
+        {
+            Canvas.ScrollbackOffset += notches * WheelScrollbackLines;
+            e.Handled = true;
+        }
+        else if (notches != 0)
         {
             PostMouse(e.GetPosition(this), MouseButton.None, MouseAction.Wheel, notches, e.KeyModifiers);
             e.Handled = true;
@@ -603,6 +622,7 @@ public sealed class CanvasView : Control
             var text = clipboard is null ? null : await clipboard.TryGetTextAsync();
             if (!string.IsNullOrEmpty(text))
             {
+                Canvas.ScrollbackOffset = 0;
                 RestartBlink();
                 Canvas.Input.Post(new PasteEvent(text.ReplaceLineEndings("\n")));
             }
