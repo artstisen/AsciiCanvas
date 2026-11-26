@@ -62,6 +62,9 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 - Box-drawing (`U+2500` block) and block elements (`U+2580`) are painted procedurally by the Avalonia host, not from font glyphs, so they join at any scale. `BoxDrawing` describes the line arms.
 - `CanvasSizing.ScaleToFit` keeps columns/rows and scales cells; `FillWithCells` keeps cell size and changes columns/rows (posts a `ResizeEvent`).
 - Typed text (`TextEvent`) and key presses (`KeyEvent`) are separate; a printable key press arrives as both. `TextTerminal.ReadKeyAsync` skips the key-down for printable keys and returns the text.
+- **Diagnostics are a feature of the grid**: `CanvasView.ShowDiagnostics` shows Avalonia's FPS/render graphs plus our own overlay (cells, draw ms, renders/s, from `RenderStatistics`); `AllowDiagnosticsToggle` makes F3 switch it at run time. Keep both off by default and keep F3 opt-in, so programs receive every key.
+- **The stress test is the benchmark** (demo menu item 6, run with `--fill --font-size=N`; measure in Release only). Baseline in the README: about 10 µs per cell per draw. Re-measure after changing `CellRenderer`, `RenderResources` or `CanvasView.Render`. Every `Present()` redraws the whole grid, so cost depends on grid size, not on how much changed. The glyph cache size is not the bottleneck (tested); the next candidate is drawing a run of cells as one glyph run instead of one text item per cell.
+- **A blink must not redraw an invisible cursor**: the blink timer only invalidates when the last frame had a visible cursor and the control has focus (a hidden cursor used to cost 38% of a core on a 29,000-cell grid).
 
 ## Reference files (read on demand, not loaded at start)
 

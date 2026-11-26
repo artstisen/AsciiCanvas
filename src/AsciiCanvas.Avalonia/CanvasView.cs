@@ -1,7 +1,10 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
+using Avalonia.Rendering;
 using Avalonia.Threading;
 
 namespace AsciiCanvas.Avalonia;
@@ -37,20 +40,30 @@ public sealed class CanvasView : Control
     public static readonly StyledProperty<bool> CursorBlinkProperty =
         AvaloniaProperty.Register<CanvasView, bool>(nameof(CursorBlink), true);
 
+    /// <summary>Identifies <see cref="ShowDiagnostics"/>.</summary>
+    public static readonly StyledProperty<bool> ShowDiagnosticsProperty =
+        AvaloniaProperty.Register<CanvasView, bool>(nameof(ShowDiagnostics));
+
+    /// <summary>Identifies <see cref="AllowDiagnosticsToggle"/>.</summary>
+    public static readonly StyledProperty<bool> AllowDiagnosticsToggleProperty =
+        AvaloniaProperty.Register<CanvasView, bool>(nameof(AllowDiagnosticsToggle));
+
     private readonly CellGrid _frame = new(1, 1);
     private readonly RenderResources _resources = new();
+    private readonly RenderStatistics _statistics = new(TimeProvider.System);
     private readonly DispatcherTimer _blinkTimer = new() { Interval = TimeSpan.FromMilliseconds(530) };
 
     private (double Advance, double Height)? _fontMetrics;
     private int _invalidatePending;
     private bool _blinkOn = true;
+    private bool _cursorDrawn;
     private bool _attached;
     private (int Column, int Row) _lastMouseCell = (-1, -1);
 
     static CanvasView()
     {
         FocusableProperty.OverrideDefaultValue<CanvasView>(true);
-        AffectsRender<CanvasView>(CanvasProperty, SizingProperty, PreserveAspectRatioProperty, FontFamilyProperty, FontSizeProperty, PaletteProperty);
+        AffectsRender<CanvasView>(CanvasProperty, SizingProperty, PreserveAspectRatioProperty, FontFamilyProperty, FontSizeProperty, PaletteProperty, ShowDiagnosticsProperty);
         AffectsMeasure<CanvasView>(SizingProperty, FontFamilyProperty, FontSizeProperty);
     }
 
@@ -61,7 +74,12 @@ public sealed class CanvasView : Control
         _blinkTimer.Tick += (_, _) =>
         {
             _blinkOn = !_blinkOn;
-            InvalidateVisual();
+
+            // A blink only changes the picture when a cursor is drawn; otherwise it would re-render the whole grid for nothing.
+            if (_cursorDrawn && IsFocused)
+            {
+                InvalidateVisual();
+            }
         };
     }
 
@@ -114,6 +132,26 @@ public sealed class CanvasView : Control
         set => SetValue(CursorBlinkProperty, value);
     }
 
+    /// <summary>
+    /// Shows performance diagnostics over the grid: Avalonia's frame rate and render-time graphs, and an overlay with the
+    /// grid size and how long the control takes to draw it. Meant for testing; off by default.
+    /// </summary>
+    public bool ShowDiagnostics
+    {
+        get => GetValue(ShowDiagnosticsProperty);
+        set => SetValue(ShowDiagnosticsProperty, value);
+    }
+
+    /// <summary>
+    /// When true, F3 switches <see cref="ShowDiagnostics"/> on and off while the control has focus, and the key is not
+    /// passed on to the program. Off by default, so the program receives every key.
+    /// </summary>
+    public bool AllowDiagnosticsToggle
+    {
+        get => GetValue(AllowDiagnosticsToggleProperty);
+        set => SetValue(AllowDiagnosticsToggleProperty, value);
+    }
+
     private double RenderScaling => TopLevel.GetTopLevel(this)?.RenderScaling ?? 1d;
 
     private (double Advance, double Height) FontMetrics => _fontMetrics ??= MeasureFont();
@@ -132,45 +170,13 @@ public sealed class CanvasView : Control
     {
         base.Render(context);
 
-        var info = Canvas.CopyFrame(_frame);
-        var palette = Palette;
-        var columns = _frame.Columns;
-        var rows = _frame.Rows;
-        var bounds = new Rect(Bounds.Size);
+        var started = TimeProvider.System.GetTimestamp();
+        DrawFrame(context);
+        _statistics.Record(TimeProvider.System.GetElapsedTime(started));
 
-        context.FillRectangle(_resources.BrushFor(palette.DefaultBackground), bounds);
-
-        var layout = ComputeLayout(columns, rows, out var fontSize);
-        if (layout.CellWidth <= 0 || layout.CellHeight <= 0)
+        if (ShowDiagnostics)
         {
-            return;
-        }
-
-        var renderer = new CellRenderer(_resources, context, palette, layout, FontFamily, fontSize, RenderScaling);
-
-        using (context.PushClip(bounds))
-        {
-            for (var y = 0; y < rows; y++)
-            {
-                var row = _frame.Row(y);
-                FillBackgrounds(renderer, palette, row, y);
-
-                for (var x = 0; x < columns; x++)
-                {
-                    var cell = row[x];
-                    if (cell.Width != CellWidth.WideTrail)
-                    {
-                        renderer.DrawForeground(cell, x, y, invert: false);
-                    }
-                }
-            }
-
-            if (info.CursorVisible && (_blinkOn || !CursorBlink || !IsFocused))
-            {
-                var cursorX = Math.Clamp(info.CursorColumn, 0, columns - 1);
-                var cursorY = Math.Clamp(info.CursorRow, 0, rows - 1);
-                renderer.DrawCursor(_frame[cursorX, cursorY], cursorX, cursorY, info.CursorShape, IsFocused);
-            }
+            DrawDiagnostics(context);
         }
     }
 
@@ -181,6 +187,7 @@ public sealed class CanvasView : Control
         _attached = true;
         Canvas.Presented += OnPresented;
         UpdateBlinkTimer();
+        ApplyRendererOverlays();
         Dispatcher.UIThread.Post(() => Focus(), DispatcherPriority.Input);
     }
 
@@ -226,6 +233,10 @@ public sealed class CanvasView : Control
         {
             UpdateBlinkTimer();
         }
+        else if (change.Property == ShowDiagnosticsProperty)
+        {
+            ApplyRendererOverlays();
+        }
     }
 
     /// <inheritdoc/>
@@ -253,6 +264,12 @@ public sealed class CanvasView : Control
         }
 
         var modifiers = InputMapping.MapModifiers(e.KeyModifiers);
+        if (AllowDiagnosticsToggle && key == Key.F3 && modifiers == KeyModifiers.None)
+        {
+            ShowDiagnostics = !ShowDiagnostics;
+            e.Handled = true;
+            return;
+        }
         RestartBlink();
         Canvas.Input.Post(new KeyEvent(key, modifiers));
         if (InputMapping.ShouldHandle(key, modifiers))
@@ -341,6 +358,80 @@ public sealed class CanvasView : Control
         {
             PostMouse(e.GetPosition(this), MouseButton.None, MouseAction.Wheel, notches, e.KeyModifiers);
             e.Handled = true;
+        }
+    }
+
+    private void DrawFrame(DrawingContext context)
+    {
+        var info = Canvas.CopyFrame(_frame);
+        _cursorDrawn = info.CursorVisible;
+        var palette = Palette;
+        var columns = _frame.Columns;
+        var rows = _frame.Rows;
+        var bounds = new Rect(Bounds.Size);
+
+        context.FillRectangle(_resources.BrushFor(palette.DefaultBackground), bounds);
+
+        var layout = ComputeLayout(columns, rows, out var fontSize);
+        if (layout.CellWidth <= 0 || layout.CellHeight <= 0)
+        {
+            return;
+        }
+
+        var renderer = new CellRenderer(_resources, context, palette, layout, FontFamily, fontSize, RenderScaling);
+
+        using (context.PushClip(bounds))
+        {
+            for (var y = 0; y < rows; y++)
+            {
+                var row = _frame.Row(y);
+                FillBackgrounds(renderer, palette, row, y);
+
+                for (var x = 0; x < columns; x++)
+                {
+                    var cell = row[x];
+                    if (cell.Width != CellWidth.WideTrail)
+                    {
+                        renderer.DrawForeground(cell, x, y, invert: false);
+                    }
+                }
+            }
+
+            if (info.CursorVisible && (_blinkOn || !CursorBlink || !IsFocused))
+            {
+                var cursorX = Math.Clamp(info.CursorColumn, 0, columns - 1);
+                var cursorY = Math.Clamp(info.CursorRow, 0, rows - 1);
+                renderer.DrawCursor(_frame[cursorX, cursorY], cursorX, cursorY, info.CursorShape, IsFocused);
+            }
+        }
+    }
+
+    // Bottom-right, so it stays clear of Avalonia's own overlays at the top.
+    private void DrawDiagnostics(DrawingContext context)
+    {
+        var cells = _frame.Columns * _frame.Rows;
+        var text = RenderResources.CreateText(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{_frame.Columns} x {_frame.Rows} = {cells:N0} cells\nDraw {_statistics.AverageMilliseconds:F1} ms avg, {_statistics.MaxMilliseconds:F1} ms max\n{_statistics.RendersPerSecond:F1} renders/s"),
+            FontFamily,
+            12,
+            Brushes.White,
+            bold: false,
+            italic: false);
+
+        var box = new Rect(Bounds.Width - text.Width - 22, Bounds.Height - text.Height - 20, text.Width + 12, text.Height + 8);
+        context.FillRectangle(new ImmutableSolidColorBrush(Color.FromArgb(210, 0, 0, 0)), box);
+        context.DrawText(text, new Point(box.X + 6, box.Y + 4));
+    }
+
+    private void ApplyRendererOverlays()
+    {
+        if (TopLevel.GetTopLevel(this) is { } topLevel)
+        {
+            topLevel.RendererDiagnostics.DebugOverlays = ShowDiagnostics
+                ? RendererDebugOverlays.Fps | RendererDebugOverlays.RenderTimeGraph
+                : RendererDebugOverlays.None;
         }
     }
 

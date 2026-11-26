@@ -34,6 +34,9 @@ internal static class DemoApp
                 case "5":
                     await UnicodeAsync(canvas);
                     break;
+                case "6":
+                    await StressAsync(canvas);
+                    break;
                 case "q" or null:
                     return;
             }
@@ -68,11 +71,11 @@ internal static class DemoApp
 
     private static void DrawMenu(CellCanvas canvas)
     {
-        DrawFrame(canvas, "AsciiCanvas", "q: quit");
+        DrawFrame(canvas, "AsciiCanvas", "q: quit   F3: performance overlay");
         canvas.Write(4, 3, "A character-cell canvas for ASCII user interfaces", _title);
         canvas.Write(4, 4, $"Grid: {canvas.Columns} x {canvas.Rows} cells - resize the window!", _hint);
 
-        string[] items = ["Colors and attributes", "Boxes, lines and blocks", "Terminal (line input)", "Mouse paint", "Unicode and wide characters"];
+        string[] items = ["Colors and attributes", "Boxes, lines and blocks", "Terminal (line input)", "Mouse paint", "Unicode and wide characters", "Stress test (every cell, every frame)"];
         for (var i = 0; i < items.Length; i++)
         {
             canvas.Write(6, 7 + (i * 2), $"{i + 1}", _keyLabel);
@@ -255,6 +258,99 @@ internal static class DemoApp
     // ConsoleColor uses a different bit order than ANSI (blue and red swapped).
     private static byte ToAnsi(int consoleColor) =>
         (byte)((consoleColor & 8) | ((consoleColor & 1) << 2) | (consoleColor & 2) | ((consoleColor & 4) >> 2));
+
+    private static async Task StressAsync(CellCanvas canvas)
+    {
+        const string ramp = " .:-=+*#%@";
+        const string special = "│─┼╬█▓▒░▀▄▌▐■□●○◆◇▲▼★";
+        var clock = TimeProvider.System;
+        var start = clock.GetTimestamp();
+        var paused = false;
+        var frames = 0;
+        var fps = 0.0;
+        var fpsWindowStart = start;
+
+        while (true)
+        {
+            while (canvas.Input.TryRead(out var input))
+            {
+                switch (input)
+                {
+                    case KeyEvent { Key: Key.Escape }:
+                        return;
+                    case TextEvent { Text: " " }:
+                        paused = !paused;
+                        break;
+                }
+            }
+
+            if (!paused)
+            {
+                var t = clock.GetElapsedTime(start).TotalSeconds;
+                var frameStart = clock.GetTimestamp();
+                FillPlasma(canvas, t, ramp, special);
+                var fillMilliseconds = clock.GetElapsedTime(frameStart).TotalMilliseconds;
+                DrawStressPanel(canvas, fps, fillMilliseconds);
+                canvas.Present();
+                frames++;
+
+                var windowSeconds = clock.GetElapsedTime(fpsWindowStart).TotalSeconds;
+                if (windowSeconds >= 0.5)
+                {
+                    fps = frames / windowSeconds;
+                    frames = 0;
+                    fpsWindowStart = clock.GetTimestamp();
+                }
+            }
+
+            await Task.Delay(paused ? 50 : 1, canvas.Closed);
+        }
+    }
+
+    // Every cell gets a new character, foreground and background each frame.
+    private static void FillPlasma(CellCanvas canvas, double t, string ramp, string special)
+    {
+        var columns = canvas.Columns;
+        var rows = canvas.Rows;
+        for (var y = 0; y < rows; y++)
+        {
+            for (var x = 0; x < columns; x++)
+            {
+                var v = Math.Sin((x * 0.09) + t)
+                    + Math.Sin((y * 0.17) - (t * 1.3))
+                    + Math.Sin(((x + y) * 0.05) + (t * 0.7))
+                    + Math.Sin((Math.Sqrt(((x * x) / 4.0) + (y * y)) * 0.2) - t);
+                var n = (v + 4) / 8;
+
+                var r = (int)(n * 5.99);
+                var g = (int)(Math.Abs(Math.Sin(n * Math.PI)) * 5.99);
+                var b = (int)((1 - n) * 5.99);
+                var style = new CellStyle(CellColor.Cube(5 - r, 5 - g, 5 - b), CellColor.Cube(r / 2, g / 2, b / 2));
+
+                var c = ((x * 7) + (y * 13)) % 23 == 0
+                    ? special[(x + y) % special.Length]
+                    : ramp[(int)(n * 9.99)];
+                canvas.SetCell(x, y, c, style);
+            }
+        }
+    }
+
+    private static void DrawStressPanel(CellCanvas canvas, double fps, double fillMilliseconds)
+    {
+        var panel = new CellRect(2, 1, 46, 7);
+        if (canvas.Columns < panel.Right + 2 || canvas.Rows < panel.Bottom + 1)
+        {
+            return;
+        }
+
+        var cells = canvas.Columns * canvas.Rows;
+        var text = new CellStyle(CellColor.BrightWhite, CellColor.Black);
+        canvas.Box(panel, BoxStyle.DoubleLine, new CellStyle(CellColor.BrightYellow, CellColor.Black), "Stress test", fill: true);
+        canvas.Write(4, 2, $"Grid:    {canvas.Columns} x {canvas.Rows} = {cells:N0} cells", text);
+        canvas.Write(4, 3, $"Program: {fillMilliseconds,6:F1} ms to fill, {fps,5:F0} frames/s", text);
+        canvas.Write(4, 4, "Every cell changes every frame.", text);
+        canvas.Write(4, 5, "Space: pause   F3: overlay   Esc: back", text);
+    }
 
     private static async Task PaintAsync(CellCanvas canvas)
     {

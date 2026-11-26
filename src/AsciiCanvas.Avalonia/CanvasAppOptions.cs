@@ -31,4 +31,10 @@ public sealed class CanvasAppOptions
 
     /// <summary>Close the window as soon as the program returns. When false the final screen stays until the user closes the window.</summary>
     public bool CloseWindowWhenProgramEnds { get; init; }
+
+    /// <summary>Shows performance diagnostics over the grid at start-up. See <see cref="CanvasView.ShowDiagnostics"/>.</summary>
+    public bool ShowDiagnostics { get; init; }
+
+    /// <summary>Lets F3 switch the diagnostics on and off. The key is then not passed on to the program. See <see cref="CanvasView.AllowDiagnosticsToggle"/>.</summary>
+    public bool AllowDiagnosticsToggle { get; init; }
 }

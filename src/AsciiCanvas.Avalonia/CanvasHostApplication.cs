@@ -31,6 +31,8 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 PreserveAspectRatio = options.PreserveAspectRatio,
                 FontSize = options.FontSize,
                 Palette = options.Palette,
+                ShowDiagnostics = options.ShowDiagnostics,
+                AllowDiagnosticsToggle = options.AllowDiagnosticsToggle,
             };
 
             if (options.FontFamily is { } family)

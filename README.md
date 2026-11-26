@@ -30,6 +30,27 @@ CanvasApp.Run(async canvas =>
 
 Run the demo with `dotnet run --project samples/AsciiCanvas.Demo` (add `-- --fill` for fixed cell size, `-- --jetbrains` for JetBrains Mono).
 
+## Diagnostics and stress test
+
+`CanvasView.ShowDiagnostics` (or `CanvasAppOptions.ShowDiagnostics`) draws performance diagnostics over the grid: Avalonia's frame rate and render-time graphs, plus an overlay in the bottom-right corner with the grid size, the cell count, and how long the control takes to draw it. It is off by default. With `AllowDiagnosticsToggle` set, **F3** switches it on and off at run time, and the key is not passed on to the program.
+
+The demo's menu item **6, Stress test**, rewrites every cell with new text, colors and box/block characters each frame. Choose the number of cells with the window size and the font size:
+
+```powershell
+dotnet run -c Release --project samples/AsciiCanvas.Demo -- --fill --font-size=10 --diagnostics
+```
+
+Measured in a Release build with every cell changing every frame (an extreme case; a normal UI changes a few cells and costs one draw per `Present`):
+
+| Grid | Cells | Draw time | Renders/s |
+|---|---|---|---|
+| 80 x 30 | 2,400 | 23 ms | 23 |
+| 173 x 53 | 9,169 | 90 ms | 9 |
+| 211 x 65 | 13,715 | 192 ms | 4.5 |
+| 317 x 92 | 29,164 | 326 ms | 2.9 |
+
+That is about 10 µs per cell and per draw. A screen that does not change costs nothing: no draw happens and the process is idle.
+
 ## Development
 
 The coding rules come from the [CSharp Coding Kit](https://github.com/artstisen/csharp-coding-kit), installed in `.claude/` and enforced by `.editorconfig` and the analyzers at build time. See `CLAUDE.md` for the project conventions.
