@@ -41,10 +41,17 @@ internal static class InputMapping
         return result;
     }
 
-    /// <summary>Keys that must not also trigger Avalonia's own handling (focus movement and the like).</summary>
+    /// <summary>
+    /// Keys that must not also trigger Avalonia's own handling (focus movement and the like). Ctrl+Alt together is left
+    /// unhandled: it is how Windows reports AltGr, which types characters such as <c>$ @ { [ \</c> on many layouts, and a handled
+    /// key press makes Avalonia drop the text that follows it.
+    /// </summary>
     public static bool ShouldHandle(Key key, KeyModifiers modifiers) =>
         key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Enter or Key.Escape
-        || (modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0;
+        || (!IsAltGr(modifiers) && (modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0);
+
+    private static bool IsAltGr(KeyModifiers modifiers) =>
+        (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == (KeyModifiers.Control | KeyModifiers.Alt);
 
     /// <summary>Ctrl+V and Cmd+V, plus the classic Shift+Insert.</summary>
     public static bool IsPasteShortcut(Key key, KeyModifiers modifiers) =>
