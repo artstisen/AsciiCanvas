@@ -6,8 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Cascadia Mono (SIL OFL 1.1) is embedded so every platform renders the same default font. -->
+    <!-- Cascadia Mono (SIL OFL 1.1) is embedded so every platform renders the same default font. The icon is the default window icon. -->
     <AvaloniaResource Include="Assets\Fonts\**" />
+    <AvaloniaResource Include="Assets\Icons\AsciiCanvas.png" />
   </ItemGroup>
 
   <ItemGroup>

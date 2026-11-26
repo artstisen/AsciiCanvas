@@ -13,6 +13,9 @@ namespace AsciiCanvas.Avalonia;
 /// <summary>Avalonia control that displays a <see cref="CellCanvas"/> and feeds keyboard, text and mouse input back to it.</summary>
 public sealed class CanvasView : Control
 {
+    // The thickness in pixels of the band along each window edge that resizes a window without a frame.
+    private const double ResizeGrip = 6;
+
     /// <summary>Identifies <see cref="Canvas"/>.</summary>
     public static readonly StyledProperty<CellCanvas> CanvasProperty =
         AvaloniaProperty.Register<CanvasView, CellCanvas>(nameof(Canvas));
@@ -64,6 +67,7 @@ public sealed class CanvasView : Control
     private bool _cursorDrawn;
     private bool _attached;
     private (int Column, int Row) _lastMouseCell = (-1, -1);
+    private ResizeEdge _cursorEdge;
 
     static CanvasView()
     {
@@ -323,6 +327,12 @@ public sealed class CanvasView : Control
         base.OnPointerPressed(e);
         Focus();
         var point = e.GetCurrentPoint(this);
+        if (point.Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed && TryStartWindowAction(e, point.Position))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var button = InputMapping.MapButton(point.Properties.PointerUpdateKind);
         if (button == MouseButton.None)
         {
@@ -355,6 +365,7 @@ public sealed class CanvasView : Control
     {
         base.OnPointerMoved(e);
         var point = e.GetCurrentPoint(this);
+        UpdateCursor(e);
         var cell = CellAt(point.Position);
         if (cell == _lastMouseCell)
         {
@@ -386,6 +397,109 @@ public sealed class CanvasView : Control
             e.Handled = true;
         }
     }
+
+    // For a window without a frame the control moves and resizes the window itself, because only the OS can run a drag.
+    private Window? FramelessWindow =>
+        TopLevel.GetTopLevel(this) is Window { WindowDecorations: not WindowDecorations.Full } window ? window : null;
+
+    private static ResizeEdge EdgeAt(Window window, PointerEventArgs e)
+    {
+        if (window.WindowState != WindowState.Normal || !window.CanResize)
+        {
+            return ResizeEdge.None;
+        }
+
+        var position = e.GetPosition(window);
+        return ResizeEdges.At(position.X, position.Y, window.Bounds.Width, window.Bounds.Height, ResizeGrip);
+    }
+
+    private bool TryStartWindowAction(PointerPressedEventArgs e, Point position)
+    {
+        if (FramelessWindow is not { } window)
+        {
+            return false;
+        }
+
+        var edge = EdgeAt(window, e);
+        if (edge != ResizeEdge.None)
+        {
+            window.BeginResizeDrag(ToWindowEdge(edge), e);
+            return true;
+        }
+
+        if (!IsOverDragRegion(position))
+        {
+            return false;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            if (window.CanResize)
+            {
+                window.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            }
+        }
+        else
+        {
+            window.BeginMoveDrag(e);
+        }
+
+        return true;
+    }
+
+    private bool IsOverDragRegion(Point position)
+    {
+        var regions = Canvas.WindowDragRegions;
+        if (regions.Count == 0)
+        {
+            return false;
+        }
+
+        var layout = ComputeLayout(Canvas.Columns, Canvas.Rows, out _);
+        var x = position.X - layout.OffsetX;
+        var y = position.Y - layout.OffsetY;
+        if (x < 0 || y < 0 || x >= layout.CellWidth * Canvas.Columns || y >= layout.CellHeight * Canvas.Rows)
+        {
+            return false;
+        }
+
+        var (column, row) = layout.CellAt(position.X, position.Y, Canvas.Columns, Canvas.Rows);
+        return regions.Any(region => region.Contains(column, row));
+    }
+
+    private void UpdateCursor(PointerEventArgs e)
+    {
+        var edge = FramelessWindow is { } window ? EdgeAt(window, e) : ResizeEdge.None;
+        if (edge == _cursorEdge)
+        {
+            return;
+        }
+
+        _cursorEdge = edge;
+        Cursor = edge == ResizeEdge.None ? null : new Cursor(ToCursorType(edge));
+    }
+
+    private static WindowEdge ToWindowEdge(ResizeEdge edge) => edge switch
+    {
+        ResizeEdge.Left => WindowEdge.West,
+        ResizeEdge.Right => WindowEdge.East,
+        ResizeEdge.Top => WindowEdge.North,
+        ResizeEdge.Bottom => WindowEdge.South,
+        ResizeEdge.TopLeft => WindowEdge.NorthWest,
+        ResizeEdge.TopRight => WindowEdge.NorthEast,
+        ResizeEdge.BottomLeft => WindowEdge.SouthWest,
+        _ => WindowEdge.SouthEast,
+    };
+
+    private static StandardCursorType ToCursorType(ResizeEdge edge) => edge switch
+    {
+        ResizeEdge.Left or ResizeEdge.Right => StandardCursorType.SizeWestEast,
+        ResizeEdge.Top or ResizeEdge.Bottom => StandardCursorType.SizeNorthSouth,
+        ResizeEdge.TopLeft => StandardCursorType.TopLeftCorner,
+        ResizeEdge.TopRight => StandardCursorType.TopRightCorner,
+        ResizeEdge.BottomLeft => StandardCursorType.BottomLeftCorner,
+        _ => StandardCursorType.BottomRightCorner,
+    };
 
     private void DrawFrame(DrawingContext context)
     {

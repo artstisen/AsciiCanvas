@@ -16,7 +16,8 @@ to build it, see the [README](../README.md). The code samples here were built an
   shortcuts and navigation, never both for the same thing.
 - One rune per cell. East Asian wide characters and emoji take two cells. There are no combining characters.
 - `CellCanvas` is thread-safe. The program runs on a background thread; the window runs on the UI thread.
-- Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time.
+- Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time. `Frame = CanvasFrame.None`
+  removes the OS title bar and border so the program draws its own (see "Windows without a frame").
 
 ## Getting the packages
 
@@ -127,6 +128,7 @@ Everything the user does arrives in `canvas.Input` as an `InputEvent`. Read with
 | `PasteEvent(Text)` | Pasted text from Ctrl+V, Cmd+V or Shift+Insert, with line breaks as `\n` |
 | `MouseEvent(Column, Row, Button, Action, WheelDelta, Modifiers)` | Press, release, move (only when the cell changes) and wheel, in cell coordinates |
 | `ResizeEvent(Columns, Rows)` | The grid changed size. Redraw |
+| `WindowStateEvent(State)` | The window was minimized, maximized or restored (`Normal`, `Minimized`, `Maximized`) |
 | `CloseRequestedEvent` | The user tried to close the window and the program asked to decide (`InterceptClose`) |
 
 ```csharp
@@ -198,6 +200,8 @@ new CanvasAppOptions
 {
     Title = "My tool",                       // the initial title; change it later with canvas.Title
     Icon = File.ReadAllBytes("app.ico"),     // optional; PNG or ICO bytes; change it later with canvas.Icon
+    UseExecutableIcon = false,               // true: show the exe's icon (Windows) instead of the AsciiCanvas icon
+    Frame = CanvasFrame.System,              // CanvasFrame.None: no title bar or border; the program draws its own
     Columns = 100, Rows = 30,
     Sizing = CanvasSizing.FillWithCells,
     FontSize = 16,
@@ -209,11 +213,14 @@ new CanvasAppOptions
 }
 ```
 
-- **Title and icon**: `canvas.Title = "notes.txt *";` and `canvas.Icon = File.ReadAllBytes("app.ico");` work at any time, from any
+- **Title and icon**: `canvas.Title = "notes.txt *";` and `canvas.Icon = File.ReadAllBytes("app.png");` work at any time, from any
   thread, and the window follows. The icon is the bytes of a PNG or ICO file (also available as `CanvasAppOptions.Icon` for the
-  start-up icon); empty bytes restore the platform default, and bytes the platform cannot decode are ignored. On Windows,
-  `<ApplicationIcon>` in your `.csproj` sets the icon of the exe, and the window uses it too when no `Icon` is given. On Linux
-  and macOS use `Icon`.
+  start-up icon). Without one, the window shows the AsciiCanvas icon (a dark gray rounded square with three blue squares forming
+  an "A"); empty bytes bring that back, and bytes the platform cannot decode are ignored. To show the icon of your executable
+  instead (on Windows, the one set with `<ApplicationIcon>` in your `.csproj`), set `UseExecutableIcon = true`. Other platforms have
+  no executable icon for a window, so give them an `Icon`.
+- **Frame**: `Frame = CanvasFrame.System` (default) gives the window the title bar and border of the operating system.
+  `CanvasFrame.None` removes them, so the program draws its own; see "Windows without a frame" below.
 - **Sizing**. `ScaleToFit` (default) keeps the column and row count and scales cells and font with the window.
   `PreserveAspectRatio` (default true) keeps the cells at the font's proportions and centers the grid; false stretches the grid
   to fill. `FillWithCells` keeps the cell size and changes the column and row count when the window is resized. The program
@@ -221,6 +228,70 @@ new CanvasAppOptions
 - **Fonts**: Cascadia Mono (default) and JetBrains Mono are embedded, so every platform looks the same. Any other
   monospaced `FontFamily` works.
 - **Diagnostics**: `ShowDiagnostics` draws the frame rate, render times and the grid size over the canvas, for testing.
+
+## Windows without a frame
+
+With `Frame = CanvasFrame.None` the window has no title bar and no border: the whole window is the canvas, and the program draws
+its own frame, title bar and buttons with cells, in the style of the program. The host supplies what only the operating system
+can do:
+
+| What | How |
+|---|---|
+| Move the window | Set `canvas.WindowDragRegions` to the cells of your title bar (without the buttons in it). A press there moves the window, and a double-click maximizes or restores it. The press does not reach `canvas.Input` |
+| Resize the window | Built in: the outer 6 pixels along each edge and corner resize the window, with the matching mouse cursor. Presses there do not reach `canvas.Input`, so keep clickable things a few pixels away from the very edge |
+| Minimize, maximize, restore | `canvas.WindowState = CanvasWindowState.Minimized / Maximized / Normal`. Read `canvas.WindowState` to draw the right glyph; a `WindowStateEvent` arrives when it changes |
+| Close | `canvas.Exit()`, or your own close logic first (an "unsaved changes" question, for example) |
+
+```csharp
+CanvasApp.Run(async canvas =>
+{
+    canvas.InterceptClose = true;
+    while (true)
+    {
+        // Row 0 is the title bar: a title at the left and [-][+][x] at the right.
+        canvas.Fill(new CellRect(0, 0, canvas.Columns, 1), ' ', new CellStyle(CellColor.White, CellColor.Blue));
+        canvas.Write(1, 0, "My program", new CellStyle(CellColor.BrightWhite, CellColor.Blue, CellAttributes.Bold));
+        canvas.Write(canvas.Columns - 9, 0, " - ", new CellStyle(CellColor.BrightWhite, CellColor.Blue));
+        canvas.Write(canvas.Columns - 6, 0, canvas.WindowState == CanvasWindowState.Maximized ? " r " : " + ", new CellStyle(CellColor.BrightWhite, CellColor.Blue));
+        canvas.Write(canvas.Columns - 3, 0, " x ", new CellStyle(CellColor.BrightWhite, CellColor.Red));
+        canvas.WindowDragRegions = [new CellRect(0, 0, canvas.Columns - 9, 1)];
+        canvas.Present();
+
+        switch (await canvas.Input.ReadAsync(canvas.Closed))
+        {
+            case CloseRequestedEvent:
+                canvas.Exit();
+                break;
+            case MouseEvent { Action: MouseAction.Press, Button: MouseButton.Left, Row: 0 } click:
+                if (click.Column >= canvas.Columns - 3)
+                {
+                    canvas.Exit();
+                }
+                else if (click.Column >= canvas.Columns - 6)
+                {
+                    canvas.WindowState = canvas.WindowState == CanvasWindowState.Maximized ? CanvasWindowState.Normal : CanvasWindowState.Maximized;
+                }
+                else if (click.Column >= canvas.Columns - 9)
+                {
+                    canvas.WindowState = CanvasWindowState.Minimized;
+                }
+
+                break;
+        }
+    }
+}, new CanvasAppOptions { Title = "My program", Frame = CanvasFrame.None, Sizing = CanvasSizing.FillWithCells });
+```
+
+Things to know:
+
+- Use `Sizing = CanvasSizing.FillWithCells` (or `PreserveAspectRatio = false`) so the grid reaches the edges of the window. With the
+  default scaled grid the cells keep their proportions and the grid is centered, which leaves margins around your title bar.
+- The window title still matters: it is what the taskbar and Alt+Tab show. Keep setting `canvas.Title`.
+- With no frame there is no border or shadow, so draw a border or give the title bar a color that stands out from the desktop.
+- Set `WindowDragRegions` again whenever the layout changes (after a `ResizeEvent`, for example). It is copied when set.
+- A maximized window fills the work area and leaves the taskbar visible. Resize grips and dragging are off while it is maximized.
+- The `samples/AsciiCanvas.Editor` sample shows a complete version: run it with `--frameless`.
+- Tested on Windows only. Moving and resizing use the window manager's own drag, which is the normal way on Linux and macOS too, but I have not run them there. On macOS the red, yellow and green buttons are gone with the frame, so the program must offer every action itself.
 
 ## Console-style programs
 

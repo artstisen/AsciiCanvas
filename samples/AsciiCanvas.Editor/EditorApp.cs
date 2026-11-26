@@ -8,7 +8,7 @@ namespace AsciiCanvas.Editor;
 /// The editor program: reads keys, text, paste, mouse and close requests from the canvas, edits the model, and shows menus
 /// and dialogs that are drawn with cells too. Menu entries, shortcuts and a close request all end up in <see cref="ExecuteAsync"/>.
 /// </summary>
-internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? path, string lineEnding)
+internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? path, string lineEnding, bool frameless)
 {
     private const string Welcome = """
         Welcome to the AsciiCanvas editor
@@ -47,11 +47,13 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
     private bool _quit;
     private bool _dragging;
     private bool _followCaret = true;
+    private WindowButton _hoverButton;
 
     /// <summary>Runs the editor on a canvas until the user exits or the window closes.</summary>
     /// <param name="canvas">The canvas to use.</param>
     /// <param name="path">The file to open, or <see langword="null"/> for a new document.</param>
-    public static async Task RunAsync(CellCanvas canvas, string? path)
+    /// <param name="frameless">True when the window has no frame, so the editor draws its own window buttons and title bar.</param>
+    public static async Task RunAsync(CellCanvas canvas, string? path, bool frameless = false)
     {
         // The window must not close before the editor has had the chance to ask about unsaved changes.
         canvas.InterceptClose = true;
@@ -77,7 +79,7 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
             }
         }
 
-        var app = new EditorApp(canvas, new EditorModel(text), path, lineEnding) { _message = message };
+        var app = new EditorApp(canvas, new EditorModel(text), path, lineEnding, frameless) { _message = message };
         await app.RunAsync();
         canvas.Exit();
     }
@@ -120,7 +122,18 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         var name = DisplayName + (model.IsModified ? " *" : string.Empty);
         canvas.Title = $"{name} - AsciiCanvas Editor";
         _view.Draw(canvas, model, new EditorChrome(_message, LineEndingName), _followCaret);
-        _menuBar.DrawBar(canvas, name);
+
+        if (!frameless)
+        {
+            _menuBar.DrawBar(canvas, name);
+            return;
+        }
+
+        // Without a frame, the top row is also the title bar: the free space between the menus and the buttons moves the window.
+        _menuBar.DrawBar(canvas, name, WindowButtons.Width);
+        WindowButtons.Draw(canvas, canvas.WindowState == CanvasWindowState.Maximized, _hoverButton);
+        var menusEnd = _menuBar.TitleRect(_menuBar.Menus.Count - 1).Right;
+        canvas.WindowDragRegions = [new CellRect(menusEnd, 0, Math.Max(0, canvas.Columns - WindowButtons.Width - menusEnd), 1)];
     }
 
     private void Redraw()
@@ -298,6 +311,16 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
 
     private async Task HandleMouseAsync(MouseEvent mouse)
     {
+        if (frameless)
+        {
+            _hoverButton = WindowButtons.At(canvas, mouse.Column, mouse.Row);
+            if (mouse is { Action: MouseAction.Press, Button: MouseButton.Left } && _hoverButton != WindowButton.None)
+            {
+                await ClickWindowButtonAsync(_hoverButton);
+                return;
+            }
+        }
+
         switch (mouse)
         {
             case { Action: MouseAction.Press, Button: MouseButton.Left, Row: 0 }:
@@ -324,6 +347,22 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
                 // Scrolling looks around without moving the caret, so the view must not snap back to it.
                 _followCaret = false;
                 _view.Scroll(model, -mouse.WheelDelta * 3);
+                break;
+        }
+    }
+
+    private async Task ClickWindowButtonAsync(WindowButton button)
+    {
+        switch (button)
+        {
+            case WindowButton.Minimize:
+                canvas.WindowState = CanvasWindowState.Minimized;
+                break;
+            case WindowButton.Maximize:
+                canvas.WindowState = canvas.WindowState == CanvasWindowState.Maximized ? CanvasWindowState.Normal : CanvasWindowState.Maximized;
+                break;
+            case WindowButton.Close:
+                await ExecuteAsync(EditorCommand.Exit);
                 break;
         }
     }

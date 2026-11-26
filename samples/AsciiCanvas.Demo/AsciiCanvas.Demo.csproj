@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\src\AsciiCanvas.Avalonia\Assets\Icons\AsciiCanvas.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 
@@ -12,6 +13,10 @@ namespace AsciiCanvas.Avalonia;
 internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, CanvasAppOptions options) : Application
 {
     private static readonly TimeSpan _programShutdownTimeout = TimeSpan.FromSeconds(2);
+
+    private const string DefaultIconUri = "avares://AsciiCanvas.Avalonia/Assets/Icons/AsciiCanvas.png";
+
+    private WindowIcon? _defaultIcon;
 
     private CellCanvas? _canvas;
     private Task? _programTask;
@@ -47,6 +52,7 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 Title = options.Title,
                 Content = view,
                 SizeToContent = SizeToContent.WidthAndHeight,
+                WindowDecorations = options.Frame == CanvasFrame.None ? WindowDecorations.None : WindowDecorations.Full,
                 Background = new SolidColorBrush(Color.FromUInt32(0xFF000000 | options.Palette.DefaultBackground)),
             };
             window.Closing += (_, e) =>
@@ -64,6 +70,14 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
             canvas.Icon = options.Icon;
             canvas.IconChanged += () => Dispatcher.UIThread.Post(() => ApplyIcon(window, canvas.Icon));
             ApplyIcon(window, canvas.Icon);
+            canvas.WindowStateRequested += state => Dispatcher.UIThread.Post(() => window.WindowState = ToWindowState(state));
+            window.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == Window.WindowStateProperty)
+                {
+                    canvas.ReportWindowState(FromWindowState(window.WindowState));
+                }
+            };
             canvas.ExitRequested += () => Dispatcher.UIThread.Post(() => CloseWindow(window));
             desktop.MainWindow = window;
 
@@ -111,11 +125,25 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
         }
     }
 
-    private static void ApplyIcon(Window window, ReadOnlyMemory<byte> image)
+    private static WindowState ToWindowState(CanvasWindowState state) => state switch
+    {
+        CanvasWindowState.Minimized => WindowState.Minimized,
+        CanvasWindowState.Maximized => WindowState.Maximized,
+        _ => WindowState.Normal,
+    };
+
+    private static CanvasWindowState FromWindowState(WindowState state) => state switch
+    {
+        WindowState.Minimized => CanvasWindowState.Minimized,
+        WindowState.Maximized or WindowState.FullScreen => CanvasWindowState.Maximized,
+        _ => CanvasWindowState.Normal,
+    };
+
+    private void ApplyIcon(Window window, ReadOnlyMemory<byte> image)
     {
         if (image.IsEmpty)
         {
-            window.Icon = null;
+            window.Icon = options.UseExecutableIcon ? null : _defaultIcon ??= LoadDefaultIcon();
             return;
         }
 
@@ -128,6 +156,12 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
         {
             // An image the platform cannot decode must not take the window down; the current icon stays.
         }
+    }
+
+    private static WindowIcon LoadDefaultIcon()
+    {
+        using var stream = AssetLoader.Open(new Uri(DefaultIconUri));
+        return new WindowIcon(stream);
     }
 
     private void CloseWindow(Window window)

@@ -242,6 +242,45 @@ public class CellCanvasTests
         Assert.Equal(new byte[] { 1, 2, 3 }, canvas.Icon.ToArray());
     }
 
+    [Fact]
+    public void WindowState_WhenSet_AsksTheHostAndKeepsTheReportedState()
+    {
+        using var canvas = new CellCanvas(4, 1);
+        var requests = new List<CanvasWindowState>();
+        canvas.WindowStateRequested += requests.Add;
+
+        canvas.WindowState = CanvasWindowState.Maximized;
+
+        Assert.Equal([CanvasWindowState.Maximized], requests);
+        Assert.Equal(CanvasWindowState.Normal, canvas.WindowState);
+    }
+
+    [Fact]
+    public void ReportWindowState_WhenChanged_PostsAnEventOnce()
+    {
+        using var canvas = new CellCanvas(4, 1);
+
+        canvas.ReportWindowState(CanvasWindowState.Maximized);
+        canvas.ReportWindowState(CanvasWindowState.Maximized);
+
+        Assert.True(canvas.Input.TryRead(out var posted));
+        Assert.Equal(new WindowStateEvent(CanvasWindowState.Maximized), posted);
+        Assert.False(canvas.Input.TryRead(out _));
+        Assert.Equal(CanvasWindowState.Maximized, canvas.WindowState);
+    }
+
+    [Fact]
+    public void WindowDragRegions_WhenSet_AreCopied()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        var regions = new List<CellRect> { new(0, 0, 5, 1) };
+
+        canvas.WindowDragRegions = regions;
+        regions.Add(new CellRect(5, 0, 5, 1));
+
+        Assert.Equal([new CellRect(0, 0, 5, 1)], canvas.WindowDragRegions);
+    }
+
     private static string RowText(CellCanvas canvas, int y)
     {
         var sb = new StringBuilder();

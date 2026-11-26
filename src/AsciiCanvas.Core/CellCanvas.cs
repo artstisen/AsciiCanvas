@@ -22,6 +22,8 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     private bool _changed;
     private string _title = string.Empty;
     private ReadOnlyMemory<byte> _icon;
+    private CanvasWindowState _windowState;
+    private CellRect[] _dragRegions = [];
     private long _version;
     private int _cursorColumn;
     private int _cursorRow;
@@ -38,6 +40,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
 
     /// <summary>Raised on the calling thread after <see cref="Icon"/> changed. Hosts should marshal to their UI thread.</summary>
     public event Action? IconChanged;
+
+    /// <summary>Raised on the calling thread when the program sets <see cref="WindowState"/>. Hosts should marshal to their UI thread and change the window.</summary>
+    public event Action<CanvasWindowState>? WindowStateRequested;
 
     /// <summary>Input from the user. Hosts post to it; programs read from it.</summary>
     public CanvasInput Input { get; } = new();
@@ -103,6 +108,70 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
                 IconChanged?.Invoke();
             }
         }
+    }
+
+    /// <summary>
+    /// The state of the window. Reading gives the state the host last reported; setting asks the host to minimize, maximize or restore
+    /// the window, and the host then reports the new state with a <see cref="WindowStateEvent"/>. Nothing happens without a host.
+    /// </summary>
+    public CanvasWindowState WindowState
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _windowState;
+            }
+        }
+
+        set => WindowStateRequested?.Invoke(value);
+    }
+
+    /// <summary>
+    /// The cells that move the window when the user drags them, for a window without a frame. Typically the title bar, without
+    /// the buttons in it. Double-clicking a region maximizes or restores the window. A press in a region is handled by the host and
+    /// does not reach <see cref="Input"/>. Empty by default; the host ignores it for a window with a frame. Set a new list whenever
+    /// the layout changes, for example after a <see cref="ResizeEvent"/>; the list is copied.
+    /// </summary>
+    public IReadOnlyList<CellRect> WindowDragRegions
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _dragRegions;
+            }
+        }
+
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            var copy = value.ToArray();
+            lock (_gate)
+            {
+                if (!copy.AsSpan().SequenceEqual(_dragRegions))
+                {
+                    _dragRegions = copy;
+                }
+            }
+        }
+    }
+
+    /// <summary>For hosts: reports the state of the window. A change is posted to <see cref="Input"/> as a <see cref="WindowStateEvent"/>.</summary>
+    /// <param name="state">The state the window is in now.</param>
+    public void ReportWindowState(CanvasWindowState state)
+    {
+        lock (_gate)
+        {
+            if (_windowState == state)
+            {
+                return;
+            }
+
+            _windowState = state;
+        }
+
+        Input.Post(new WindowStateEvent(state));
     }
 
     /// <summary>

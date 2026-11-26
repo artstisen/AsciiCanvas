@@ -27,8 +27,9 @@ CanvasApp.Run(async canvas =>
 sizing, console-style programs, hosting `CanvasView` in your own Avalonia app, and testing without a window.
 
 * **Drawing** goes to a back buffer; `Present()` publishes it, so partial frames are never shown. All members are thread-safe.
-* **Window title and icon**: `CanvasAppOptions.Title` and `CanvasAppOptions.Icon` (PNG or ICO bytes) set the initial ones, and `canvas.Title = "..."` / `canvas.Icon = bytes` change them at any time. On Windows, `<ApplicationIcon>` in the program's project also sets the window icon when no `Icon` is given.
-* **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `PasteEvent`, `MouseEvent` (cell coordinates), `ResizeEvent` and `CloseRequestedEvent`.
+* **Window title and icon**: `CanvasAppOptions.Title` and `CanvasAppOptions.Icon` (PNG or ICO bytes) set the initial ones, and `canvas.Title = "..."` / `canvas.Icon = bytes` change them at any time. Without an icon the window shows the AsciiCanvas icon (set `UseExecutableIcon` to show the executable's icon instead, on Windows).
+* **Windows without a frame**: `CanvasAppOptions.Frame = CanvasFrame.None` removes the title bar and border, so the program draws its own with cells: `canvas.WindowDragRegions` marks the cells that move the window, `canvas.WindowState` minimizes, maximizes and restores it, and the outer pixels of the window resize it. The editor sample shows it (`--frameless`). See [docs/USAGE.md](docs/USAGE.md).
+* **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `PasteEvent`, `MouseEvent` (cell coordinates), `ResizeEvent`, `WindowStateEvent` and `CloseRequestedEvent`.
 * **Resize and close events**: `ResizeEvent` is sent whenever the grid changes size, which with `CanvasSizing.FillWithCells` happens whenever the window is resized (with `ScaleToFit` the grid keeps its size, so there is nothing to report). `CloseRequestedEvent` is sent when the user tries to close the window, but only if the program has set `canvas.InterceptClose = true`; the window then stays open until the program calls `canvas.Exit()`, so it can ask about unsaved changes first. A program that sets `InterceptClose` must keep reading input.
 * **Paste and clipboard**: Ctrl+V, Cmd+V and Shift+Insert make the host read the clipboard and send the text as one `PasteEvent` (multi-line text included, line breaks as `\n`); set `CanvasView.InterceptPasteShortcut` / `CanvasAppOptions.InterceptPasteShortcut` to false to get the raw key press instead. Programs copy and cut through `canvas.Clipboard` (`ICanvasClipboard`: `GetTextAsync`, `SetTextAsync`), which does not depend on the UI framework. `KeyModifiers.Meta` is the Command key, so a Mac program can accept `Control` or `Meta` for its shortcuts. `TextTerminal.ReadLineAsync` accepts pasted text.
 * **Scaling**: `CanvasSizing.ScaleToFit` keeps the column/row count and scales cells and font; `CanvasSizing.FillWithCells` keeps the cell size and changes the column/row count (the program receives a `ResizeEvent`). Use `canvas.Resize(columns, rows)` to change the grid size from the program.
@@ -46,9 +47,11 @@ Run the demo with `dotnet run --project samples/AsciiCanvas.Demo` (add `-- --fil
 * **File browser** for Open and Save As: the folder, a scrollable list of folders and files with sizes, a name field and buttons. Click an entry to select it and click again to open it, or use the arrow keys, Enter, typing and Backspace (up a folder). On Windows, going up from a drive root lists the drives. Open accepts text files only: a file with binary data, or over 32 MB, is refused with a message.
 * **Editing**: line numbers, scroll bar, selection (Shift+arrows, mouse drag), word and document movement, auto-indent, tabs, wide characters, undo and redo, and copy, cut and paste through the system clipboard. Saving keeps the file's line endings.
 * **Closing**: the editor sets `canvas.InterceptClose`, so the window's close button, Exit and Ctrl+Q all ask "Save changes?" when there are unsaved changes, and the editor then calls `canvas.Exit()`.
+* **Frameless mode**: with `--frameless` the editor opens a window without the OS title bar and border and draws its own: the top row holds the menus, the file name and `– □ ×` buttons, the free space in it moves the window (double-click maximizes), and the window edges resize it.
 
 ```powershell
 dotnet run --project samples/AsciiCanvas.Editor -- notes.txt
+dotnet run --project samples/AsciiCanvas.Editor -- --frameless notes.txt
 ```
 
 Shortcuts: Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+Q (Cmd on a Mac), Ctrl+Z / Ctrl+Y, Ctrl+X / C / V, Ctrl+A, and F3 for the performance overlay.

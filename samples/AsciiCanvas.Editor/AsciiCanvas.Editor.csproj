@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>..\..\src\AsciiCanvas.Avalonia\Assets\Icons\AsciiCanvas.ico</ApplicationIcon>
     <RootNamespace>AsciiCanvas.Editor</RootNamespace>
     <!--
       No ICU: .NET does not load libicu (Linux) or icu.dll (Windows), so the published editor has one fewer system

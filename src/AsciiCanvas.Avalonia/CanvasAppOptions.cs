@@ -10,10 +10,19 @@ public sealed class CanvasAppOptions
 
     /// <summary>
     /// The initial window icon, as the bytes of an image file (PNG or ICO), for example from <c>File.ReadAllBytes</c> or an embedded resource.
-    /// Empty (the default) keeps the platform default, which on Windows is the icon set with <c>ApplicationIcon</c>.
+    /// Empty (the default) shows the AsciiCanvas icon, or the icon of the executable with <see cref="UseExecutableIcon"/>.
     /// The program can change it later with <see cref="CellCanvas.Icon"/>.
     /// </summary>
     public ReadOnlyMemory<byte> Icon { get; init; }
+
+    /// <summary>
+    /// With no <see cref="Icon"/>, show the icon of the executable (on Windows, the one set with <c>ApplicationIcon</c> in the project)
+    /// instead of the AsciiCanvas icon. Other platforms have no executable icon for a window and show their default.
+    /// </summary>
+    public bool UseExecutableIcon { get; init; }
+
+    /// <summary>Whether the window has the frame of the operating system or none, so the program draws its own. See <see cref="CanvasFrame.None"/>.</summary>
+    public CanvasFrame Frame { get; init; } = CanvasFrame.System;
 
     /// <summary>The initial number of columns.</summary>
     public int Columns { get; init; } = 80;

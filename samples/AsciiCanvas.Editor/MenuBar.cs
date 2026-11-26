@@ -99,7 +99,8 @@ public sealed class MenuBar(IReadOnlyList<Menu> menus)
     /// <summary>Draws the bar on the top row, with text at the right (such as the file name).</summary>
     /// <param name="canvas">The canvas.</param>
     /// <param name="rightText">The text to show at the right end.</param>
-    public void DrawBar(CellCanvas canvas, string rightText)
+    /// <param name="reserve">The number of columns at the right end to leave free, for something else drawn there.</param>
+    public void DrawBar(CellCanvas canvas, string rightText, int reserve = 0)
     {
         canvas.Fill(new CellRect(0, 0, canvas.Columns, 1), ' ', UiStyles.MenuBar);
         for (var i = 0; i < menus.Count; i++)
@@ -109,9 +110,9 @@ public sealed class MenuBar(IReadOnlyList<Menu> menus)
             canvas.Write(rect.X, 0, " " + menus[i].Title + " ", style);
         }
 
-        var room = canvas.Columns - TitleRect(menus.Count - 1).Right - 3;
+        var room = canvas.Columns - TitleRect(menus.Count - 1).Right - 3 - reserve;
         var text = TextFit.Truncate(rightText, room);
-        canvas.Write(canvas.Columns - CharWidth.Of(text) - 1, 0, text, UiStyles.MenuBar);
+        canvas.Write(canvas.Columns - CharWidth.Of(text) - 1 - reserve, 0, text, UiStyles.MenuBar);
     }
 
     /// <summary>Draws a drop-down menu with one entry highlighted.</summary>
