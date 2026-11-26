@@ -306,6 +306,50 @@ public class ScrollbackTests
         Assert.Throws<ArgumentOutOfRangeException>(() => canvas.ScrollbackLimit = -1);
     }
 
+    [Fact]
+    public void Resize_ShorterThanTheCursorRow_KeepingTheCursorRow_MovesTheTopRowsIntoTheScrollback()
+    {
+        using var canvas = WithScrollback(3, 4, 10);
+        canvas.KeepCursorRowOnShrink = true;
+        Lines(canvas, "aaa", "bbb", "ccc", "dd>");
+        canvas.SetCursor(2, 3);
+
+        canvas.Resize(3, 2);
+
+        Assert.Equal(["ccc", "dd>"], View(canvas));
+        Assert.Equal(1, canvas.CursorRow);
+        Assert.Equal(2, canvas.ScrollbackCount);
+        canvas.ScrollbackOffset = 2;
+        Assert.Equal(["aaa", "bbb"], View(canvas));
+    }
+
+    [Fact]
+    public void Resize_ShorterButTheCursorRowStillFits_KeepingTheCursorRow_KeepsTheContentAtTheTop()
+    {
+        using var canvas = WithScrollback(3, 4, 10);
+        canvas.KeepCursorRowOnShrink = true;
+        Lines(canvas, "aaa", "bb>");
+        canvas.SetCursor(2, 1);
+
+        canvas.Resize(3, 2);
+
+        Assert.Equal(["aaa", "bb>"], View(canvas));
+        Assert.Equal(0, canvas.ScrollbackCount);
+    }
+
+    [Fact]
+    public void Resize_ShorterThanTheCursorRow_WithoutKeepingTheCursorRow_CutsTheBottomRows()
+    {
+        using var canvas = WithScrollback(3, 4, 10);
+        Lines(canvas, "aaa", "bbb", "ccc", "dd>");
+        canvas.SetCursor(2, 3);
+
+        canvas.Resize(3, 2);
+
+        Assert.Equal(["aaa", "bbb"], View(canvas));
+        Assert.Equal(0, canvas.ScrollbackCount);
+    }
+
     private static CellCanvas WithScrollback(int columns, int rows, int limit)
     {
         var canvas = new CellCanvas(columns, rows);

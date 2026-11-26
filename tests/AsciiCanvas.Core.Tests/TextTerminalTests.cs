@@ -238,6 +238,26 @@ public class TextTerminalTests
         await Assert.ThrowsAsync<OperationCanceledException>(async () => await terminal.ReadKeyAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public void WindowMadeShorter_KeepsTheLineBeingTypedOnVisible_AndWritesBelowTheTextAbove()
+    {
+        using var canvas = new CellCanvas(6, 5);
+        var terminal = new TextTerminal(canvas);
+        terminal.WriteLine("one");
+        terminal.WriteLine("two");
+        terminal.WriteLine("three");
+        terminal.WriteLine("four");
+        terminal.Write("> ");
+
+        canvas.Resize(6, 3);
+        terminal.Write("x");
+
+        Assert.Equal("three ", RowText(canvas, 0));
+        Assert.Equal("four  ", RowText(canvas, 1));
+        Assert.Equal("> x   ", RowText(canvas, 2));
+        Assert.Equal(2, terminal.CursorRow);
+    }
+
     private static string RowText(CellCanvas canvas, int y)
     {
         var chars = new char[canvas.Columns];

@@ -162,7 +162,9 @@ Redraw();
 - `Key` names: `A`-`Z`, `D0`-`D9`, `NumPad0`-`9`, `F1`-`F12`, `Left`/`Right`/`Up`/`Down`, `Home`/`End`/`PageUp`/`PageDown`,
   `Insert`/`Delete`, `Enter`, `Escape`, `Back` (Backspace), `Tab`, `Space`. If you also use `Avalonia.Input`, write
   `AsciiCanvas.Key` in full, because `Key` is ambiguous there.
-- After a resize, the old content stays at the top-left and new cells are blank, so redraw everything.
+- After a resize, the old content stays at the top-left and new cells are blank, so redraw everything. With
+  `canvas.KeepCursorRowOnShrink = true` (which `TextTerminal` sets), a canvas made shorter than the cursor row is scrolled up
+  first, as a terminal does, so the cursor row stays the last row and the rows that leave the top go to the scrollback.
 - Handle a burst of events before drawing, so a long paste or a held key draws once:
 
   ```csharp
@@ -357,7 +359,8 @@ return CanvasApp.RunTerminal(async terminal =>
 
 A paste arrives as it does in a console. `ReadKeyAsync` returns the text of each pasted line with an `Enter` press for each line
 break. `ReadLineAsync` returns the first pasted line, and the following reads return the rest, one line each. `RunTerminal` turns on
-1000 rows of scrollback (see "Scrollback").
+1000 rows of scrollback (see "Scrollback"). When the window is made shorter, the terminal keeps the line it writes on: the rows
+above it move up into the scrollback instead of the bottom rows being cut off.
 
 ## Porting a console program
 

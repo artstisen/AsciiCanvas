@@ -21,8 +21,8 @@ public sealed class TextTerminal(CellCanvas canvas)
     private int _row;
     private int _scrolls;
 
-    /// <summary>The canvas this terminal writes to.</summary>
-    public CellCanvas Canvas { get; } = canvas;
+    /// <summary>The canvas this terminal writes to. Its <see cref="CellCanvas.KeepCursorRowOnShrink"/> is turned on, so a shorter window keeps the line being written.</summary>
+    public CellCanvas Canvas { get; } = KeepingCursorRow(canvas);
 
     /// <summary>A <see cref="TextWriter"/> that writes to this terminal, e.g. for code that expects <c>Console.Out</c>.</summary>
     public TextWriter Out => field ??= new TerminalTextWriter(this);
@@ -375,6 +375,13 @@ public sealed class TextTerminal(CellCanvas canvas)
     }
 
     // Keeps the cursor valid if the canvas was resized behind our back. A column equal to Columns is a pending wrap.
+    private static CellCanvas KeepingCursorRow(CellCanvas canvas)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        canvas.KeepCursorRowOnShrink = true;
+        return canvas;
+    }
+
     private void Constrain()
     {
         _column = Math.Clamp(_column, 0, Canvas.Columns);

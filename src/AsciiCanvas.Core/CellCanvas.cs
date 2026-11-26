@@ -211,6 +211,30 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         }
     }
 
+    /// <summary>
+    /// When true, making the canvas shorter than the row of the cursor scrolls the content up, as a terminal does, so the cursor row
+    /// becomes the last row instead of being cut off; with <see cref="ScrollbackLimit"/> above 0 the rows that leave the top go to the
+    /// scrollback. Off by default (the content stays at the top-left). <see cref="TextTerminal"/> turns it on for its canvas.
+    /// </summary>
+    public bool KeepCursorRowOnShrink
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                field = value;
+            }
+        }
+    }
+
     /// <summary>The system clipboard, if the host provides one. <see langword="null"/> otherwise (for example in tests).</summary>
     public ICanvasClipboard? Clipboard { get; set; }
 
@@ -459,7 +483,8 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     }
 
     /// <summary>
-    /// Changes the number of columns and rows, keeping content at the top-left, and presents the result.
+    /// Changes the number of columns and rows, keeping content at the top-left, and presents the result. With
+    /// <see cref="KeepCursorRowOnShrink"/>, a canvas made shorter than the cursor row is first scrolled up so the cursor row stays.
     /// A <see cref="ResizeEvent"/> is posted to <see cref="Input"/>.
     /// </summary>
     /// <param name="columns">The new number of columns (at least 1).</param>
@@ -471,6 +496,18 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             if (columns == _back.Columns && rows == _back.Rows)
             {
                 return;
+            }
+
+            // A terminal keeps the line it writes on: rows leave the top, rather than the cursor row leaving the bottom.
+            var shift = KeepCursorRowOnShrink ? _cursorRow - (rows - 1) : 0;
+            if (shift > 0)
+            {
+                var whole = new CellRect(0, 0, _back.Columns, _back.Rows);
+                KeepRowsLeavingTheTop(shift);
+                var saved = CaptureCore(whole);
+                FillCore(whole, new Rune(' '), Pen, ignoreClip: true);
+                BlitCore(saved, saved.Bounds, 0, -shift, whole, skipBlanks: false);
+                _cursorRow -= shift;
             }
 
             _back.Resize(columns, rows, Pen);
@@ -801,13 +838,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             }
 
             // The terminal rule: only rows leaving the top of the screen are history; a scrolled window further down is not.
-            if (_scrollback.Limit > 0 && dx == 0 && dy < 0 && area.Y == 0 && area.X == 0 && area.Width == _back.Columns)
+            if (dx == 0 && dy < 0 && area.Y == 0 && area.X == 0 && area.Width == _back.Columns)
             {
-                for (var y = 0; y < Math.Min(-dy, area.Height); y++)
-                {
-                    _pendingScrollback.Add(_back.Row(y).ToArray());
-                    _pendingRowCount = _pendingRowCount == int.MaxValue ? int.MaxValue : _pendingRowCount + 1;
-                }
+                KeepRowsLeavingTheTop(Math.Min(-dy, area.Height));
             }
 
             var saved = CaptureCore(area);
@@ -862,6 +895,21 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         _version++;
         _frameInfo = _frameInfo with { Version = _version };
         return true;
+    }
+
+    // Called under the lock before the top `count` rows of the back buffer scroll off the screen: they become scrollback at the next Present.
+    private void KeepRowsLeavingTheTop(int count)
+    {
+        if (_scrollback.Limit == 0)
+        {
+            return;
+        }
+
+        for (var y = 0; y < count; y++)
+        {
+            _pendingScrollback.Add(_back.Row(y).ToArray());
+            _pendingRowCount = _pendingRowCount == int.MaxValue ? int.MaxValue : _pendingRowCount + 1;
+        }
     }
 
     // Called under the lock when a frame is published: the rows that left that frame become visible history.
