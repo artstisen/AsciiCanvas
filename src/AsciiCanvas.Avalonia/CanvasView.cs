@@ -10,7 +10,7 @@ namespace AsciiCanvas.Avalonia;
 public sealed class CanvasView : Control
 {
     // Declared first: the styled properties below use it, and static initializers run in textual order.
-    private static readonly FontFamily _defaultFontFamily = new("Cascadia Mono, Cascadia Code, Consolas, Menlo, DejaVu Sans Mono, Courier New");
+    private static readonly FontFamily _embeddedFontFamily = new("avares://AsciiCanvas.Avalonia/Assets/Fonts#Cascadia Mono");
 
     /// <summary>Identifies <see cref="Canvas"/>.</summary>
     public static readonly StyledProperty<CellCanvas> CanvasProperty =
@@ -26,7 +26,7 @@ public sealed class CanvasView : Control
 
     /// <summary>Identifies <see cref="FontFamily"/>.</summary>
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
-        AvaloniaProperty.Register<CanvasView, FontFamily>(nameof(FontFamily), _defaultFontFamily);
+        AvaloniaProperty.Register<CanvasView, FontFamily>(nameof(FontFamily), _embeddedFontFamily);
 
     /// <summary>Identifies <see cref="FontSize"/>.</summary>
     public static readonly StyledProperty<double> FontSizeProperty =
@@ -68,6 +68,9 @@ public sealed class CanvasView : Control
         };
     }
 
+    /// <summary>The font used unless <see cref="FontFamily"/> is set: Cascadia Mono, embedded in this library so it looks the same on every platform.</summary>
+    public static FontFamily DefaultFontFamily => _embeddedFontFamily;
+
     /// <summary>The canvas shown by this control. Defaults to a new 80 x 25 canvas.</summary>
     public CellCanvas Canvas
     {
@@ -89,7 +92,7 @@ public sealed class CanvasView : Control
         set => SetValue(PreserveAspectRatioProperty, value);
     }
 
-    /// <summary>The font of the cells. Must be monospaced.</summary>
+    /// <summary>The font of the cells. Must be monospaced. Defaults to <see cref="DefaultFontFamily"/>.</summary>
     public FontFamily FontFamily
     {
         get => GetValue(FontFamilyProperty);

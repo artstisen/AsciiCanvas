@@ -6,6 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Cascadia Mono (SIL OFL 1.1) is embedded so every platform renders the same default font. -->
+    <AvaloniaResource Include="Assets\Fonts\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AsciiCanvas.Core\AsciiCanvas.Core.csproj" />
   </ItemGroup>
 

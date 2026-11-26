@@ -25,6 +25,7 @@ CanvasApp.Run(async canvas =>
 * **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `MouseEvent` (cell coordinates) and `ResizeEvent`.
 * **Scaling**: `CanvasSizing.ScaleToFit` keeps the column/row count and scales cells and font; `CanvasSizing.FillWithCells` keeps the cell size and changes the column/row count (the program receives a `ResizeEvent`). Use `canvas.Resize(columns, rows)` to change the grid size from the program.
 * **Colors** are the 16/256 palette (`CellColor`), mapped to RGB by a `ColorPalette` (`Campbell` by default).
+* **Font**: Cascadia Mono (SIL OFL) is embedded in `AsciiCanvas.Avalonia`, so the canvas looks the same on every platform. Set `CanvasView.FontFamily` or `CanvasAppOptions.FontFamily` to use another monospaced font. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 * **Text**: one rune per cell; East Asian wide characters and emoji take two cells. Box-drawing and block characters are painted procedurally, so they join without gaps at any scale.
 
 Run the demo with `dotnet run --project samples/AsciiCanvas.Demo` (add `-- --fill` for fixed cell size).

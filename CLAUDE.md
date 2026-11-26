@@ -52,6 +52,7 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 - **Result pattern is not used**: the library has no operations with expected failure outcomes.
 - **No `Console` use in the libraries**; `TextTerminal` is the console-like layer and exposes a `TextWriter` (`Out`).
 - **`CancellationToken` parameters are named `cancellationToken`**, and library awaits use `ConfigureAwait(false)`.
+- **The default font is embedded**: Cascadia Mono (SIL OFL 1.1) under `src/AsciiCanvas.Avalonia/Assets/Fonts`, used through an `avares://` URI. Avalonia resolves that family only from the embedded collection, so a wrong family name in `CanvasView.DefaultFontFamily` crashes at the first render. Keep the OFL text and `THIRD-PARTY-NOTICES.md` with the fonts; do not modify the font files.
 - **`Key` enum members are not individually documented** (CS1591 suppressed for that enum only): the member names are the key names.
 - **Not a NuGet package yet**, so package metadata (license, repository URL) is not set. Add it, with SourceLink and symbol packages, when publishing.
 
