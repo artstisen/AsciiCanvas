@@ -75,7 +75,7 @@ internal static class DemoApp
         canvas.Write(4, 3, "A character-cell canvas for ASCII user interfaces", _title);
         canvas.Write(4, 4, $"Grid: {canvas.Columns} x {canvas.Rows} cells - resize the window!", _hint);
 
-        string[] items = ["Colors and attributes", "Boxes, lines and blocks", "Terminal (line input)", "Mouse paint", "Unicode and wide characters", "Stress test (every cell, every frame)"];
+        string[] items = ["Colors and attributes", "Boxes, lines and blocks", "Terminal (line input, scrollback, paste)", "Mouse paint", "Unicode and wide characters", "Stress test (every cell, every frame)"];
         for (var i = 0; i < items.Length; i++)
         {
             canvas.Write(6, 7 + (i * 2), $"{i + 1}", _keyLabel);
@@ -188,15 +188,18 @@ internal static class DemoApp
         await WaitAsync(canvas, Draw, _ => null);
     }
 
+    // Only this screen has scrollback: the others are full-screen, and mouse paint needs the wheel itself.
     private static async Task TerminalAsync(CellCanvas canvas)
     {
         canvas.CursorVisible = true;
+        canvas.ScrollbackLimit = 1000;
         try
         {
             await RunTerminalAsync(canvas);
         }
         finally
         {
+            canvas.ScrollbackLimit = 0;
             canvas.CursorVisible = false;
             canvas.Pen = default;
         }
@@ -207,7 +210,9 @@ internal static class DemoApp
         canvas.Pen = default;
         var terminal = new TextTerminal(canvas);
         terminal.Clear();
-        terminal.WriteLine("AsciiCanvas terminal. Try: help, color red, date, clear, exit", new CellStyle(CellColor.BrightYellow));
+        terminal.WriteLine("AsciiCanvas terminal. Try: help, lines 200, color red, date, exit", new CellStyle(CellColor.BrightYellow));
+        terminal.WriteLine("Scroll back with the mouse wheel or Shift+PageUp/PageDown; typing returns to the bottom.", _hint);
+        terminal.WriteLine("Paste several lines and each one runs as a command.", _hint);
 
         var textStyle = CellStyle.Default;
         while (true)
@@ -224,10 +229,23 @@ internal static class DemoApp
                 case ["exit"]:
                     return;
                 case ["help"]:
-                    terminal.WriteLine("help | clear | date | color <name> | echo <text> | exit");
+                    terminal.WriteLine("help | lines [count] | scrollback | clear | clear all | date | color <name> | echo <text> | exit");
+                    break;
+                case ["lines"]:
+                    WriteLines(terminal, 100);
+                    break;
+                case ["lines", var count] when int.TryParse(count, NumberStyles.None, CultureInfo.InvariantCulture, out var lines):
+                    WriteLines(terminal, Math.Min(lines, 10_000));
+                    break;
+                case ["scrollback"]:
+                    terminal.WriteLine($"{canvas.ScrollbackCount} of {canvas.ScrollbackLimit} rows kept; the view is {canvas.ScrollbackOffset} rows back.");
                     break;
                 case ["clear"]:
                     terminal.Clear();
+                    break;
+                case ["clear", "all"]:
+                    terminal.Clear();
+                    canvas.ClearScrollback();
                     break;
                 case ["date"]:
                     terminal.WriteLine(TimeProvider.System.GetLocalNow().ToString("F", CultureInfo.CurrentCulture));
@@ -252,6 +270,28 @@ internal static class DemoApp
                     terminal.WriteLine($"Unknown command: {parts[0]}");
                     break;
             }
+        }
+    }
+
+    // Numbered lines in changing colors, so it is easy to see where you are when scrolling back. Presented once at the end, so a
+    // long run is fast; the rows that scroll off on the way still reach the scrollback.
+    private static void WriteLines(TextTerminal terminal, int count)
+    {
+        var style = terminal.Style;
+        terminal.AutoPresent = false;
+        try
+        {
+            for (var i = 1; i <= count; i++)
+            {
+                terminal.Style = new CellStyle(CellColor.FromIndex((byte)(9 + (i % 7))));
+                terminal.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Line {i,5} of {count}"));
+            }
+        }
+        finally
+        {
+            terminal.Style = style;
+            terminal.AutoPresent = true;
+            terminal.Canvas.Present();
         }
     }
 

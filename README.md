@@ -7,7 +7,7 @@ there are no escape sequences or processes, just a canvas programs draw on and a
 |---|---|
 | `src/AsciiCanvas.Core` | UI-independent model: `CellCanvas` (drawing, cursor, `CanvasInput`), `TextTerminal` (console-like output and `ReadLineAsync`), colors, box drawing, layout math |
 | `src/AsciiCanvas.Avalonia` | `CanvasView` control and `CanvasApp` (one-call window host) built on Avalonia |
-| `samples/AsciiCanvas.Demo` | Demo with colors, boxes, a terminal, mouse paint, Unicode and a stress test |
+| `samples/AsciiCanvas.Demo` | Demo with colors, boxes, a terminal (with scrollback: try `lines 200`), mouse paint, Unicode and a stress test |
 | `samples/AsciiCanvas.ConsolePort` | An ordinary console program (menu, colors, cursor placement, `ReadKey`) running on the canvas through one alias line |
 | `samples/AsciiCanvas.Editor` | A cross-platform text editor drawn on the canvas like a TUI: menu bar, file browser, dialogs, selection, clipboard, undo; builds as a single executable |
 | `tests/AsciiCanvas.Core.Tests` | xUnit v3 tests for the core |
