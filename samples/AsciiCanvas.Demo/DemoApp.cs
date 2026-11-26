@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace AsciiCanvas.Demo;
 
@@ -211,8 +212,8 @@ internal static class DemoApp
         var terminal = new TextTerminal(canvas);
         terminal.Clear();
         terminal.WriteLine("AsciiCanvas terminal. Try: help, lines 200, color red, date, exit", new CellStyle(CellColor.BrightYellow));
-        terminal.WriteLine("Scroll back with the mouse wheel or Shift+PageUp/PageDown; typing returns to the bottom.", _hint);
-        terminal.WriteLine("Paste several lines and each one runs as a command.", _hint);
+        terminal.WriteLine("Scroll back with the wheel or Shift+PageUp/PageDown; typing returns.", _hint);
+        terminal.WriteLine("Paste several lines and each one runs as a command: try 'sample', then Ctrl+V.", _hint);
 
         var textStyle = CellStyle.Default;
         while (true)
@@ -229,7 +230,10 @@ internal static class DemoApp
                 case ["exit"]:
                     return;
                 case ["help"]:
-                    terminal.WriteLine("help | lines [count] | scrollback | clear | clear all | date | color <name> | echo <text> | exit");
+                    terminal.WriteLine("help | lines [count] | scrollback | clear | clear all | sample | date | color <name> | echo <text> | exit");
+                    break;
+                case ["sample"]:
+                    await CopySampleAsync(terminal);
                     break;
                 case ["lines"]:
                     WriteLines(terminal, 100);
@@ -270,6 +274,27 @@ internal static class DemoApp
                     terminal.WriteLine($"Unknown command: {parts[0]}");
                     break;
             }
+        }
+    }
+
+    // Puts a few commands on the clipboard, so a Ctrl+V shows a multi-line paste: each line arrives as its own ReadLineAsync result.
+    private static async Task CopySampleAsync(TextTerminal terminal)
+    {
+        const string sample = "echo These lines were pasted together,\necho and each one runs as a command.\ncolor cyan\nlines 3\ncolor gray\n";
+        if (terminal.Canvas.Clipboard is not { } clipboard)
+        {
+            terminal.WriteLine("There is no clipboard here.");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(sample, terminal.Canvas.Closed);
+            terminal.WriteLine("Copied 5 commands to the clipboard. Press Ctrl+V (Cmd+V on a Mac) to paste them.");
+        }
+        catch (ExternalException)
+        {
+            terminal.WriteLine("Another program is using the clipboard; try again.");
         }
     }
 
