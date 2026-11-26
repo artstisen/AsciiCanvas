@@ -1,6 +1,7 @@
 using System.Text;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 
 namespace AsciiCanvas.Avalonia;
 
@@ -15,6 +16,10 @@ internal sealed class CellRenderer(
     double scale)
 {
     private static readonly int[] _sides = [-1, 1];
+
+    private readonly GlyphRunBuilder _run = new();
+    private readonly GlyphTypeface?[] _faces = new GlyphTypeface?[4];
+    private int _facesLoaded;
 
     public void FillCells(uint rgb, int column, int row, int span) =>
         context.FillRectangle(resources.BrushFor(rgb), CellBounds(column, row, span));
@@ -47,6 +52,130 @@ internal sealed class CellRenderer(
             {
                 DrawText(rune, rect, foreground, attributes);
             }
+        }
+
+        DrawDecorations(brush, rect, attributes);
+    }
+
+    /// <summary>
+    /// Draws the foreground of one row. Neighbouring plain glyphs with the same color and font style are drawn as one glyph run,
+    /// which is far cheaper than one text draw per cell; box, block, wide and fallback-font cells are drawn one by one.
+    /// </summary>
+    public void DrawRow(ReadOnlySpan<Cell> row, int y)
+    {
+        var run = _run;
+
+        for (var x = 0; x < row.Length; x++)
+        {
+            var cell = row[x];
+            if (cell.Width == CellWidth.WideTrail)
+            {
+                continue;
+            }
+
+            RenderResources.ResolveColors(palette, cell.Style, out var foreground, out _);
+            var attributes = cell.Style.Attributes;
+            var decorated = (attributes & (CellAttributes.Underline | CellAttributes.Strikethrough)) != 0;
+
+            if (cell.IsBlank)
+            {
+                // A space has no ink, so it can sit inside an open run instead of splitting it.
+                if (run.Count > 0 && !run.TryAppendSpace())
+                {
+                    FlushRun(y);
+                }
+
+                if (decorated)
+                {
+                    DrawDecorations(resources.BrushFor(foreground), CellBounds(x, y), attributes);
+                }
+
+                continue;
+            }
+
+            var bold = (attributes & CellAttributes.Bold) != 0;
+            var italic = (attributes & CellAttributes.Italic) != 0;
+            var rune = cell.Rune;
+            var face = FaceFor(bold, italic);
+            ushort glyph = 0;
+
+            if (face is null
+                || cell.Width != CellWidth.Narrow
+                || rune.Value is > 0xFFFF or (>= 0x2580 and <= 0x259F)
+                || BoxDrawing.TryGetSegments(rune, out _)
+                || !face.CharacterToGlyphMap.TryGetGlyph(rune.Value, out glyph)
+                || glyph == 0)
+            {
+                FlushRun(y);
+                DrawForeground(cell, x, y, invert: false);
+                continue;
+            }
+
+            if (run.Count > 0 && !run.Accepts(foreground, bold, italic))
+            {
+                FlushRun(y);
+            }
+
+            if (run.Count == 0)
+            {
+                run.Start(x, foreground, bold, italic, face);
+            }
+
+            run.Append(glyph, (char)rune.Value);
+            if (decorated)
+            {
+                DrawDecorations(resources.BrushFor(foreground), CellBounds(x, y), attributes);
+            }
+        }
+
+        FlushRun(y);
+    }
+
+    private GlyphTypeface? FaceFor(bool bold, bool italic)
+    {
+        var index = (bold ? 1 : 0) | (italic ? 2 : 0);
+        if ((_facesLoaded & (1 << index)) == 0)
+        {
+            _faces[index] = resources.FaceFor(fontFamily, bold, italic);
+            _facesLoaded |= 1 << index;
+        }
+
+        return _faces[index];
+    }
+
+    private void FlushRun(int y)
+    {
+        var run = _run;
+        run.TrimTrailingSpaces();
+        if (run.Count == 0)
+        {
+            run.Clear();
+            return;
+        }
+
+        var metrics = resources.MetricsFor(fontFamily, fontSize);
+        var first = CellBounds(run.StartColumn, y);
+        var infos = new GlyphInfo[run.Count];
+        for (var i = 0; i < infos.Length; i++)
+        {
+            var width = SnapX(run.StartColumn + i + 1) - SnapX(run.StartColumn + i);
+            infos[i] = new GlyphInfo(run.Glyphs[i], i, width, new Vector((width - first.Width) / 2, 0));
+        }
+
+        var origin = new Point(
+            first.X + ((first.Width - metrics.Width) / 2),
+            first.Y + ((first.Height - metrics.Height) / 2) + metrics.Baseline);
+        var glyphRun = new GlyphRun(run.Face!, fontSize, new string(run.Characters, 0, run.Count).AsMemory(), infos, origin);
+        context.DrawGlyphRun(resources.BrushFor(run.Foreground), glyphRun);
+        glyphRun.Dispose();
+        run.Clear();
+    }
+
+    private void DrawDecorations(IBrush brush, Rect rect, CellAttributes attributes)
+    {
+        if ((attributes & (CellAttributes.Underline | CellAttributes.Strikethrough)) == 0)
+        {
+            return;
         }
 
         var thickness = Math.Max(1 / scale, Math.Round(rect.Height / 14 * scale) / scale);

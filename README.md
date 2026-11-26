@@ -89,16 +89,16 @@ The demo's menu item **6, Stress test**, rewrites every cell with new text, colo
 dotnet run -c Release --project samples/AsciiCanvas.Demo -- --fill --font-size=10 --diagnostics
 ```
 
-Measured in a Release build with every cell changing every frame (an extreme case; a normal UI changes a few cells and costs one draw per `Present`):
+Measured in a Release build with every cell changing every frame (an extreme case; a normal UI changes a few cells and costs one draw per `Present`). The draw time is how long the control spends recording the frame:
 
-| Grid | Cells | Draw time | Renders/s |
-|---|---|---|---|
-| 80 x 30 | 2,400 | 23 ms | 23 |
-| 173 x 53 | 9,169 | 90 ms | 9 |
-| 211 x 65 | 13,715 | 192 ms | 4.5 |
-| 317 x 92 | 29,164 | 326 ms | 2.9 |
+| Grid | Cells | Draw time, per-cell text (before) | Draw time, glyph runs (now) | Renders/s now |
+|---|---|---|---|---|
+| 100 x 29 | 2,900 | 36 ms | 1.1 ms | 58 (the stress loop's own limit) |
+| 158 x 46 | 7,268 | 85 ms | 3.2 ms | 30 |
+| 211 x 65 | 13,715 | 193 ms | 6.7 ms | 28 |
+| 317 x 92 | 29,164 | 371 ms | 17 ms | 18 |
 
-That is about 10 µs per cell and per draw. A screen that does not change costs nothing: no draw happens and the process is idle.
+Neighbouring cells with the same color and font style are drawn as one glyph run, so the cost is about 0.6 µs per cell instead of 10 µs or more. Box-drawing, block, wide and fallback-font characters are still drawn one cell at a time. At the largest sizes the frame rate is now limited by Avalonia's own render thread (about 30 ms for 29,000 cells), not by the control. A screen that does not change costs nothing: no draw happens and the process is idle.
 
 ## Development
 

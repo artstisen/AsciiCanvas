@@ -13,7 +13,13 @@ internal sealed class RenderResources
 
     private readonly Dictionary<uint, IBrush> _brushes = [];
     private readonly Dictionary<GlyphKey, FormattedText> _glyphs = [];
+    private readonly Dictionary<(bool Bold, bool Italic), GlyphTypeface?> _faces = [];
     private double _glyphFontSize;
+    private FontFamily? _facesFamily;
+    private (FontFamily Family, double FontSize, TextMetrics Metrics)? _textMetrics;
+
+    /// <summary>Size of a glyph box at one font size: the advance width, the line height, and the distance from the top of the line to the baseline.</summary>
+    internal readonly record struct TextMetrics(double Width, double Height, double Baseline);
 
     private readonly record struct GlyphKey(int Rune, uint Color, bool Bold, bool Italic);
 
@@ -85,5 +91,44 @@ internal sealed class RenderResources
         return text;
     }
 
-    public void ClearGlyphs() => _glyphs.Clear();
+    /// <summary>Gets the font face used for cells with the given style, or null when the font manager has none.</summary>
+    public GlyphTypeface? FaceFor(FontFamily fontFamily, bool bold, bool italic)
+    {
+        if (!fontFamily.Equals(_facesFamily))
+        {
+            _faces.Clear();
+            _facesFamily = fontFamily;
+        }
+
+        if (!_faces.TryGetValue((bold, italic), out var face))
+        {
+            var typeface = new Typeface(fontFamily, italic ? FontStyle.Italic : FontStyle.Normal, bold ? FontWeight.Bold : FontWeight.Normal);
+            face = FontManager.Current.TryGetGlyphTypeface(typeface, out var found) ? found : null;
+            _faces[(bold, italic)] = face;
+        }
+
+        return face;
+    }
+
+    /// <summary>Measures one glyph with the text engine, so glyph runs are placed exactly where single glyphs would be.</summary>
+    public TextMetrics MetricsFor(FontFamily fontFamily, double fontSize)
+    {
+        if (_textMetrics is { } cached && cached.Family.Equals(fontFamily) && Math.Abs(cached.FontSize - fontSize) < 0.001)
+        {
+            return cached.Metrics;
+        }
+
+        var sample = CreateText("M", fontFamily, fontSize, Brushes.White, bold: false, italic: false);
+        var metrics = new TextMetrics(sample.Width, sample.Height, sample.Baseline);
+        _textMetrics = (fontFamily, fontSize, metrics);
+        return metrics;
+    }
+
+    public void ClearGlyphs()
+    {
+        _glyphs.Clear();
+        _faces.Clear();
+        _facesFamily = null;
+        _textMetrics = null;
+    }
 }

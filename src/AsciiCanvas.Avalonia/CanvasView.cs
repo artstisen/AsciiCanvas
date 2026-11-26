@@ -412,15 +412,7 @@ public sealed class CanvasView : Control
             {
                 var row = _frame.Row(y);
                 FillBackgrounds(renderer, palette, row, y);
-
-                for (var x = 0; x < columns; x++)
-                {
-                    var cell = row[x];
-                    if (cell.Width != CellWidth.WideTrail)
-                    {
-                        renderer.DrawForeground(cell, x, y, invert: false);
-                    }
-                }
+                renderer.DrawRow(row, y);
             }
 
             if (info.CursorVisible && (_blinkOn || !CursorBlink || !IsFocused))
