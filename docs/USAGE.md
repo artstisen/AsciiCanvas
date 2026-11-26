@@ -16,7 +16,7 @@ to build it, see the [README](../README.md). The code samples here were built an
   shortcuts and navigation, never both for the same thing.
 - One rune per cell. East Asian wide characters and emoji take two cells. There are no combining characters.
 - `CellCanvas` is thread-safe. The program runs on a background thread; the window runs on the UI thread.
-- Set `canvas.Title` to change the window title at any time.
+- Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time.
 
 ## Getting the packages
 
@@ -197,6 +197,7 @@ as a failed copy. `canvas.Clipboard` is null when there is no host (in tests).
 new CanvasAppOptions
 {
     Title = "My tool",                       // the initial title; change it later with canvas.Title
+    Icon = File.ReadAllBytes("app.ico"),     // optional; PNG or ICO bytes; change it later with canvas.Icon
     Columns = 100, Rows = 30,
     Sizing = CanvasSizing.FillWithCells,
     FontSize = 16,
@@ -208,7 +209,11 @@ new CanvasAppOptions
 }
 ```
 
-- **Title**: `canvas.Title = "notes.txt *";` at any time, from any thread. The window follows.
+- **Title and icon**: `canvas.Title = "notes.txt *";` and `canvas.Icon = File.ReadAllBytes("app.ico");` work at any time, from any
+  thread, and the window follows. The icon is the bytes of a PNG or ICO file (also available as `CanvasAppOptions.Icon` for the
+  start-up icon); empty bytes restore the platform default, and bytes the platform cannot decode are ignored. On Windows,
+  `<ApplicationIcon>` in your `.csproj` sets the icon of the exe, and the window uses it too when no `Icon` is given. On Linux
+  and macOS use `Icon`.
 - **Sizing**. `ScaleToFit` (default) keeps the column and row count and scales cells and font with the window.
   `PreserveAspectRatio` (default true) keeps the cells at the font's proportions and centers the grid; false stretches the grid
   to fill. `FillWithCells` keeps the cell size and changes the column and row count when the window is resized. The program

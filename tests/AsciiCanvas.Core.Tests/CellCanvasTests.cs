@@ -226,6 +226,22 @@ public class CellCanvasTests
         Assert.Throws<ArgumentNullException>(() => canvas.Title = null!);
     }
 
+    [Fact]
+    public void Icon_WhenChanged_RaisesIconChangedAndCopiesTheBytes()
+    {
+        using var canvas = new CellCanvas(4, 1);
+        var raised = 0;
+        canvas.IconChanged += () => raised++;
+        var bytes = new byte[] { 1, 2, 3 };
+
+        canvas.Icon = bytes;
+        canvas.Icon = new byte[] { 1, 2, 3 };
+        bytes[0] = 9;
+
+        Assert.Equal(1, raised);
+        Assert.Equal(new byte[] { 1, 2, 3 }, canvas.Icon.ToArray());
+    }
+
     private static string RowText(CellCanvas canvas, int y)
     {
         var sb = new StringBuilder();

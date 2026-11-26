@@ -8,6 +8,13 @@ public sealed class CanvasAppOptions
     /// <summary>The initial window title. The program can change it later with <see cref="CellCanvas.Title"/>.</summary>
     public string Title { get; init; } = "AsciiCanvas";
 
+    /// <summary>
+    /// The initial window icon, as the bytes of an image file (PNG or ICO), for example from <c>File.ReadAllBytes</c> or an embedded resource.
+    /// Empty (the default) keeps the platform default, which on Windows is the icon set with <c>ApplicationIcon</c>.
+    /// The program can change it later with <see cref="CellCanvas.Icon"/>.
+    /// </summary>
+    public ReadOnlyMemory<byte> Icon { get; init; }
+
     /// <summary>The initial number of columns.</summary>
     public int Columns { get; init; } = 80;
 

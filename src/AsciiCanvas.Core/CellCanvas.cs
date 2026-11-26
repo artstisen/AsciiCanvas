@@ -21,6 +21,7 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
 
     private bool _changed;
     private string _title = string.Empty;
+    private ReadOnlyMemory<byte> _icon;
     private long _version;
     private int _cursorColumn;
     private int _cursorRow;
@@ -34,6 +35,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
 
     /// <summary>Raised on the calling thread after <see cref="Title"/> changed, with the new title. Hosts should marshal to their UI thread.</summary>
     public event Action<string>? TitleChanged;
+
+    /// <summary>Raised on the calling thread after <see cref="Icon"/> changed. Hosts should marshal to their UI thread.</summary>
+    public event Action? IconChanged;
 
     /// <summary>Input from the user. Hosts post to it; programs read from it.</summary>
     public CanvasInput Input { get; } = new();
@@ -66,6 +70,37 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             if (changed)
             {
                 TitleChanged?.Invoke(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The icon of the window that shows the canvas, as the bytes of an image file (PNG or ICO). Set it at any time; the host
+    /// updates its window. Empty (the default) leaves the host's default, which on Windows is the icon of the executable.
+    /// The bytes are copied, and an image the host cannot read is ignored.
+    /// </summary>
+    public ReadOnlyMemory<byte> Icon
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _icon;
+            }
+        }
+
+        set
+        {
+            bool changed;
+            lock (_gate)
+            {
+                changed = !_icon.Span.SequenceEqual(value.Span);
+                _icon = value.ToArray();
+            }
+
+            if (changed)
+            {
+                IconChanged?.Invoke();
             }
         }
     }

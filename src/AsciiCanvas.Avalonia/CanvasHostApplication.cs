@@ -61,6 +61,9 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
             window.Closed += (_, _) => canvas.Close();
             canvas.Title = options.Title;
             canvas.TitleChanged += title => Dispatcher.UIThread.Post(() => window.Title = title);
+            canvas.Icon = options.Icon;
+            canvas.IconChanged += () => Dispatcher.UIThread.Post(() => ApplyIcon(window, canvas.Icon));
+            ApplyIcon(window, canvas.Icon);
             canvas.ExitRequested += () => Dispatcher.UIThread.Post(() => CloseWindow(window));
             desktop.MainWindow = window;
 
@@ -105,6 +108,25 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
         if (failed || options.CloseWindowWhenProgramEnds)
         {
             Dispatcher.UIThread.Post(() => CloseWindow(window));
+        }
+    }
+
+    private static void ApplyIcon(Window window, ReadOnlyMemory<byte> image)
+    {
+        if (image.IsEmpty)
+        {
+            window.Icon = null;
+            return;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(image.ToArray());
+            window.Icon = new WindowIcon(stream);
+        }
+        catch (Exception)
+        {
+            // An image the platform cannot decode must not take the window down; the current icon stays.
         }
     }
 
