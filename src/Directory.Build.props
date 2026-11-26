@@ -1,9 +1,8 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- Metadata shared by the two library packages. -->
+  <!-- Metadata shared by the two library packages. The version is in the root Directory.Build.props. -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
     <Authors>Lars Brandt Stisen</Authors>
     <Copyright>Copyright (c) 2026 Lars Brandt Stisen</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
