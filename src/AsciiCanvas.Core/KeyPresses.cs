@@ -16,6 +16,7 @@ internal static class KeyPresses
                 presses.Add(new KeyPress(Key.Unknown, text.Text, KeyModifiers.None));
                 break;
             case PasteEvent { Text.Length: > 0 } paste:
+                // Every Unicode line break counts (\r\n, \r, \n and the rare NEL, FF, LS and PS), whatever the source program used.
                 var lines = paste.Text.ReplaceLineEndings("\n").Split('\n');
                 for (var i = 0; i < lines.Length; i++)
                 {

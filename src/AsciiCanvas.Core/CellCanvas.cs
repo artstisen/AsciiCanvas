@@ -21,7 +21,8 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     private readonly ScrollbackBuffer _scrollback = new();
 
     // Rows that left the top since the last Present; they join the scrollback when the frame without them is published.
-    private readonly List<Cell[]> _pendingScrollback = [];
+    // It has the same limit as the scrollback, because older rows would be dropped there anyway.
+    private readonly ScrollbackBuffer _pendingScrollback = new();
 
     private bool _changed;
     private string _title = string.Empty;
@@ -32,9 +33,16 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     private int _cursorColumn;
     private int _cursorRow;
     private int _scrollbackOffset;
+
+    // All rows scrolled off since the last Present, including those the pending buffer already dropped; a scrolled-back view moves by this.
+    private int _pendingRowCount;
     private FrameInfo _frameInfo = new(0, 0, 0, true, CursorShape.Block);
 
-    /// <summary>Raised on the drawing thread after a <see cref="Present"/> that published new content. Hosts should marshal to their UI thread.</summary>
+    /// <summary>
+    /// Raised after a <see cref="Present"/> that published new content, and when the view moves through the scrollback
+    /// (<see cref="ScrollbackOffset"/>, <see cref="ScrollBack"/>, <see cref="ScrollbackLimit"/>, <see cref="ClearScrollback"/>).
+    /// It comes on the thread that made the change, so hosts should marshal to their UI thread.
+    /// </summary>
     public event Action? Presented;
 
     /// <summary>Raised when the program calls <see cref="Exit"/>. Hosts subscribe to close their window.</summary>
@@ -274,9 +282,10 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
                 }
 
                 _scrollback.SetLimit(value);
+                _pendingScrollback.SetLimit(value);
                 if (value == 0)
                 {
-                    _pendingScrollback.Clear();
+                    _pendingRowCount = 0;
                 }
 
                 viewChanged = SetOffsetCore(_scrollbackOffset);
@@ -306,6 +315,7 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// oldest row at the top. Clamped to that range. Hosts change it for the user (the wheel, Shift+PageUp) and set it back to 0 when
     /// the user types. While it is above 0, new rows entering the scrollback keep the view on the same content.
     /// It changes only what <see cref="CopyFrame"/> shows, never the canvas, and the program's cursor is hidden when it is scrolled out of view.
+    /// To move the view relative to where it is, use <see cref="ScrollBack"/>, which cannot miss rows arriving at the same time.
     /// </summary>
     public int ScrollbackOffset
     {
@@ -517,6 +527,26 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves the view <paramref name="rows"/> rows further back into the scrollback (negative moves toward the canvas), clamped like
+    /// <see cref="ScrollbackOffset"/>. Hosts use it for the wheel and Shift+PageUp/PageDown: unlike reading and setting
+    /// <see cref="ScrollbackOffset"/>, it is one step, so a <see cref="Present"/> on another thread cannot slip in between and move the view.
+    /// </summary>
+    /// <param name="rows">The number of rows to move back; negative moves forward.</param>
+    public void ScrollBack(int rows)
+    {
+        bool viewChanged;
+        lock (_gate)
+        {
+            viewChanged = SetOffsetCore((int)Math.Clamp((long)_scrollbackOffset + rows, 0, int.MaxValue));
+        }
+
+        if (viewChanged)
+        {
+            Presented?.Invoke();
+        }
+    }
+
     /// <summary>Removes every row from the scrollback and shows the canvas itself again.</summary>
     public void ClearScrollback()
     {
@@ -525,6 +555,7 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         {
             _scrollback.Clear();
             _pendingScrollback.Clear();
+            _pendingRowCount = 0;
             viewChanged = SetOffsetCore(0);
         }
 
@@ -775,6 +806,7 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
                 for (var y = 0; y < Math.Min(-dy, area.Height); y++)
                 {
                     _pendingScrollback.Add(_back.Row(y).ToArray());
+                    _pendingRowCount = _pendingRowCount == int.MaxValue ? int.MaxValue : _pendingRowCount + 1;
                 }
             }
 
@@ -835,20 +867,21 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     // Called under the lock when a frame is published: the rows that left that frame become visible history.
     private void PublishScrollback()
     {
-        if (_pendingScrollback.Count == 0)
+        if (_pendingRowCount == 0)
         {
             return;
         }
 
-        foreach (var line in _pendingScrollback)
+        for (var i = 0; i < _pendingScrollback.Count; i++)
         {
-            _scrollback.Add(line);
+            _scrollback.Add(_pendingScrollback[i]);
         }
 
-        // A view that is scrolled back stays on the same content while new rows arrive below it.
-        var offset = _scrollbackOffset == 0 ? 0 : _scrollbackOffset + _pendingScrollback.Count;
+        // A view that is scrolled back stays on the same content while new rows arrive below it, until that content is dropped.
+        var offset = _scrollbackOffset == 0 ? 0 : (long)_scrollbackOffset + _pendingRowCount;
         _pendingScrollback.Clear();
-        _scrollbackOffset = Math.Min(offset, _scrollback.Count);
+        _pendingRowCount = 0;
+        _scrollbackOffset = (int)Math.Min(offset, _scrollback.Count);
     }
 
     // Called under the lock: destination holds the front buffer; shift it down and put the scrollback rows above it.

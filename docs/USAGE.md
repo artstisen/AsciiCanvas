@@ -184,6 +184,9 @@ Redraw();
   }
   ```
 
+  `ConsoleKeyMap.FromKeyPress(press)` and `ConsoleKeyMap.FromChar(c)` do the same for one `KeyPress` (from
+  `TextTerminal.ReadKeyAsync`) or one typed character.
+
 ### Closing
 
 By default the window closes when the user closes it, and `canvas.Closed` is canceled. To ask about unsaved changes first:
@@ -256,13 +259,16 @@ as in a terminal:
   output that runs past the bottom does exactly that, so console-style programs get scrollback without doing anything. A program
   with a status line at the bottom can scroll only the rows above it (`new CellRect(0, 0, canvas.Columns, canvas.Rows - 1)`) and
   still feed the scrollback. Scrolling a region lower down, or not full width, keeps nothing. The oldest rows are dropped at the limit.
-- **Scrolling**: the mouse wheel (3 rows a notch) and Shift+PageUp/PageDown (a page) scroll the view. These then do not reach
-  the program: no wheel `MouseEvent`, no `KeyEvent` for Shift+PageUp/PageDown. Any other key, typed text or a paste brings the view
-  back to the bottom before the program gets it.
+- **Scrolling**: the mouse wheel (3 rows a notch; trackpad movement is added up, so a swipe scrolls smoothly) and
+  Shift+PageUp/PageDown (a page; Fn+Shift+Up/Down on a Mac keyboard without those keys) scroll the view. These then do not reach
+  the program: no wheel `MouseEvent`, no `KeyEvent` for Shift+PageUp/PageDown. Any other key that the program receives, typed text
+  or a paste brings the view back to the bottom before the program gets it (keys the host keeps, such as F3 for diagnostics, do not).
 - **While scrolled back**: new output does not move the view; it stays on the rows the user is reading. The cursor is hidden when it
   is out of view. Mouse events still give the cell under the pointer on the screen, not in the history.
 - **For the program**: `ScrollbackCount` is the number of rows kept, `ScrollbackOffset` is how far the view is scrolled back (set it
-  to 0 to show the canvas, for example after a command), and `ClearScrollback()` empties it. Scrolling back changes only what the
+  to 0 to show the canvas, for example after a command), `ScrollBack(rows)` moves the view relative to where it is (negative moves
+  toward the bottom; use it rather than `ScrollbackOffset += n`, which can miss rows that arrive at the same time), and
+  `ClearScrollback()` empties it. Memory grows with the rows kept, up to the limit. Scrolling back changes only what the
   host shows; drawing, `GetCell` and the cursor still work on the canvas itself.
 
 Leave scrollback off (the default for `Run`) in a full-screen program that uses the wheel or Shift+PageUp itself.

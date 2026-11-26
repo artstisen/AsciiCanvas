@@ -57,7 +57,7 @@ public class ScrollbackTests
     }
 
     [Fact]
-    public void TextTerminal_OutputPastTheBottom_CanBeScrolledBackTo()
+    public void WriteLine_TerminalOutputPastTheBottom_CanBeScrolledBackTo()
     {
         using var canvas = WithScrollback(4, 2, 100);
         var terminal = new TextTerminal(canvas);
@@ -78,12 +78,7 @@ public class ScrollbackTests
     public void ScrollbackLimit_Reached_DropsTheOldestRows()
     {
         using var canvas = WithScrollback(2, 1, 2);
-        foreach (var text in new[] { "r1", "r2", "r3", "r4" })
-        {
-            canvas.Write(0, 0, text);
-            canvas.Scroll(canvas.Bounds, 0, -1);
-            canvas.Present();
-        }
+        AddRows(canvas, "r1", "r2", "r3", "r4");
 
         canvas.ScrollbackOffset = int.MaxValue;
 
@@ -95,12 +90,7 @@ public class ScrollbackTests
     public void ScrollbackLimit_Lowered_KeepsTheNewestRows()
     {
         using var canvas = WithScrollback(2, 1, 10);
-        foreach (var text in new[] { "r1", "r2", "r3" })
-        {
-            canvas.Write(0, 0, text);
-            canvas.Scroll(canvas.Bounds, 0, -1);
-            canvas.Present();
-        }
+        AddRows(canvas, "r1", "r2", "r3");
 
         canvas.ScrollbackLimit = 1;
         canvas.ScrollbackOffset = 1;
@@ -164,9 +154,7 @@ public class ScrollbackTests
     public void ClearScrollback_ScrolledBack_EmptiesItAndShowsTheCanvas()
     {
         using var canvas = WithScrollback(2, 1, 10);
-        canvas.Write(0, 0, "ab");
-        canvas.Scroll(canvas.Bounds, 0, -1);
-        canvas.Present();
+        AddRows(canvas, "ab");
         canvas.ScrollbackOffset = 1;
 
         canvas.ClearScrollback();
@@ -190,6 +178,127 @@ public class ScrollbackTests
     }
 
     [Fact]
+    public void Scroll_ManyRowsWithoutPresent_KeepsOnlyTheNewestRowsUpToTheLimit()
+    {
+        using var canvas = WithScrollback(2, 1, 3);
+        for (var i = 0; i < 10; i++)
+        {
+            canvas.Write(0, 0, $"r{i}");
+            canvas.Scroll(canvas.Bounds, 0, -1);
+        }
+
+        canvas.Present();
+        canvas.ScrollBack(int.MaxValue);
+
+        Assert.Equal((3, 3), (canvas.ScrollbackCount, canvas.ScrollbackOffset));
+        Assert.Equal(["r7"], View(canvas));
+    }
+
+    [Fact]
+    public void Present_ScrolledBackWhileTheFullScrollbackDropsRows_KeepsTheViewOnTheSameContent()
+    {
+        using var canvas = WithScrollback(2, 1, 3);
+        AddRows(canvas, "r1", "r2", "r3");
+        canvas.ScrollBack(2);
+        Assert.Equal(["r2"], View(canvas));
+
+        AddRows(canvas, "r4");
+
+        Assert.Equal(3, canvas.ScrollbackOffset);
+        Assert.Equal(["r2"], View(canvas));
+    }
+
+    [Fact]
+    public void Present_ScrolledBackRowDropped_ShowsTheOldestRowKept()
+    {
+        using var canvas = WithScrollback(2, 1, 2);
+        AddRows(canvas, "r1", "r2");
+        canvas.ScrollBack(2);
+
+        AddRows(canvas, "r3", "r4");
+
+        Assert.Equal(2, canvas.ScrollbackOffset);
+        Assert.Equal(["r3"], View(canvas));
+    }
+
+    [Theory]
+    [InlineData(0, 0, 3, 2, 1)] // a clip covering the whole width keeps the row
+    [InlineData(0, 0, 2, 2, 0)] // a narrower clip makes the scrolled area narrower than the canvas
+    public void Scroll_InsideAClip_UsesTheClippedArea(int x, int y, int width, int height, int expectedRows)
+    {
+        using var canvas = WithScrollback(3, 2, 10);
+        Lines(canvas, "aaa", "bbb");
+
+        using (canvas.PushClip(new CellRect(x, y, width, height)))
+        {
+            canvas.Scroll(canvas.Bounds, 0, -1);
+        }
+
+        canvas.Present();
+
+        Assert.Equal(expectedRows, canvas.ScrollbackCount);
+    }
+
+    [Fact]
+    public void CopyFrame_CanvasGrewTallerWhileScrolledBack_ShowsScrollbackAboveTheTallerCanvas()
+    {
+        using var canvas = WithScrollback(2, 1, 10);
+        AddRows(canvas, "r1", "r2");
+        canvas.Write(0, 0, "nw");
+        canvas.Present();
+        canvas.ScrollBack(1);
+
+        canvas.Resize(2, 3);
+
+        Assert.Equal(["r2", "nw", "  "], View(canvas));
+    }
+
+    [Fact]
+    public void ScrollbackLimit_LoweredWhileRowsArePending_PublishesOnlyTheNewestRows()
+    {
+        using var canvas = WithScrollback(2, 1, 10);
+        foreach (var text in new[] { "r1", "r2", "r3" })
+        {
+            canvas.Write(0, 0, text);
+            canvas.Scroll(canvas.Bounds, 0, -1);
+        }
+
+        canvas.ScrollbackLimit = 1;
+        canvas.Present();
+        canvas.ScrollBack(1);
+
+        Assert.Equal(1, canvas.ScrollbackCount);
+        Assert.Equal(["r3"], View(canvas));
+    }
+
+    [Fact]
+    public void ScrollBack_ByRows_MovesRelativeToTheViewAndClamps()
+    {
+        using var canvas = WithScrollback(2, 1, 10);
+        AddRows(canvas, "r1", "r2", "r3");
+
+        canvas.ScrollBack(2);
+        var back = canvas.ScrollbackOffset;
+        canvas.ScrollBack(-1);
+        var forward = canvas.ScrollbackOffset;
+        canvas.ScrollBack(int.MinValue);
+        var bottom = canvas.ScrollbackOffset;
+        canvas.ScrollBack(int.MaxValue);
+
+        Assert.Equal((2, 1, 0, 3), (back, forward, bottom, canvas.ScrollbackOffset));
+    }
+
+    [Fact]
+    public void ScrollbackLimit_Huge_DoesNotReserveMemoryUpFront()
+    {
+        using var canvas = WithScrollback(2, 1, int.MaxValue);
+
+        AddRows(canvas, "r1");
+
+        Assert.Equal(1, canvas.ScrollbackCount);
+    }
+
+    [Fact]
     public void ScrollbackLimit_Negative_Throws()
     {
         using var canvas = new CellCanvas();
@@ -202,6 +311,17 @@ public class ScrollbackTests
         var canvas = new CellCanvas(columns, rows);
         canvas.ScrollbackLimit = limit;
         return canvas;
+    }
+
+    // On a one-row canvas: writes each text and scrolls it into the scrollback, presenting each time.
+    private static void AddRows(CellCanvas canvas, params string[] texts)
+    {
+        foreach (var text in texts)
+        {
+            canvas.Write(0, 0, text);
+            canvas.Scroll(canvas.Bounds, 0, -1);
+            canvas.Present();
+        }
     }
 
     private static void Lines(CellCanvas canvas, params string[] lines)

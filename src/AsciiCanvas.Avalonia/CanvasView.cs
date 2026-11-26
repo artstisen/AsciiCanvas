@@ -70,6 +70,9 @@ public sealed class CanvasView : Control
     private bool _cursorDrawn;
     private bool _attached;
     private (int Column, int Row) _lastMouseCell = (-1, -1);
+
+    // The part of a scrollback row that wheel movement has not scrolled yet.
+    private double _wheelScrollRows;
     private ResizeEdge _cursorEdge;
 
     static CanvasView()
@@ -299,7 +302,7 @@ public sealed class CanvasView : Control
 
         if (Canvas.ScrollbackLimit > 0 && modifiers == KeyModifiers.Shift && key is Key.PageUp or Key.PageDown)
         {
-            Canvas.ScrollbackOffset += key == Key.PageUp ? Canvas.Rows : -Canvas.Rows;
+            Canvas.ScrollBack(key == Key.PageUp ? Canvas.Rows : -Canvas.Rows);
             e.Handled = true;
             return;
         }
@@ -399,18 +402,24 @@ public sealed class CanvasView : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        if (Canvas.ScrollbackLimit > 0)
+        {
+            // Trackpads send many small fractions of a notch, so they are added up instead of each counting as a notch.
+            _wheelScrollRows += e.Delta.Y * WheelScrollbackLines;
+            var rows = (int)Math.Truncate(_wheelScrollRows);
+            _wheelScrollRows -= rows;
+            Canvas.ScrollBack(rows);
+            e.Handled = true;
+            return;
+        }
+
         var notches = (int)Math.Round(e.Delta.Y);
         if (notches == 0 && e.Delta.Y != 0)
         {
             notches = Math.Sign(e.Delta.Y);
         }
 
-        if (notches != 0 && Canvas.ScrollbackLimit > 0)
-        {
-            Canvas.ScrollbackOffset += notches * WheelScrollbackLines;
-            e.Handled = true;
-        }
-        else if (notches != 0)
+        if (notches != 0)
         {
             PostMouse(e.GetPosition(this), MouseButton.None, MouseAction.Wheel, notches, e.KeyModifiers);
             e.Handled = true;

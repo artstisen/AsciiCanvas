@@ -144,6 +144,40 @@ public class TextTerminalTests
     }
 
     [Fact]
+    public async Task ReadLineAsync_AfterKeyAvailablePeekedAPaste_ReturnsEveryPastedLine()
+    {
+        using var canvas = new CellCanvas(20, 5);
+        var terminal = new TextTerminal(canvas);
+        var ct = TestContext.Current.CancellationToken;
+        canvas.Input.Post(new PasteEvent("one\ntwo\n"));
+
+        var available = terminal.KeyAvailable;
+        var first = await terminal.ReadLineAsync(cancellationToken: ct);
+        var second = await terminal.ReadLineAsync(cancellationToken: ct);
+
+        Assert.True(available);
+        Assert.Equal(("one", "two"), (first, second));
+        Assert.False(terminal.KeyAvailable);
+    }
+
+    [Fact]
+    public async Task ReadLineAsync_ResizeWaitingBehindPastedLines_ReadsThePastedLinesFirst()
+    {
+        using var canvas = new CellCanvas(20, 5);
+        var terminal = new TextTerminal(canvas);
+        var ct = TestContext.Current.CancellationToken;
+        canvas.Input.Post(new PasteEvent("one\ntwo\n"));
+        _ = terminal.KeyAvailable;
+        canvas.Resize(10, 3);
+
+        var first = await terminal.ReadLineAsync(cancellationToken: ct);
+        var second = await terminal.ReadLineAsync(cancellationToken: ct);
+
+        Assert.Equal(("one", "two"), (first, second));
+        Assert.True(terminal.CursorRow < 3);
+    }
+
+    [Fact]
     public async Task ReadKeyAsync_PastedLineBreaks_ArriveAsEnterKeys()
     {
         using var canvas = new CellCanvas(10, 2);
