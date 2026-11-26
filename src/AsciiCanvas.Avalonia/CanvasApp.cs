@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+using System.Runtime.Versioning;
 using Avalonia;
 
 namespace AsciiCanvas.Avalonia;
@@ -10,6 +12,7 @@ public static class CanvasApp
     /// Blocks until the window closes. The program should stop when <see cref="CellCanvas.Closed"/> is canceled;
     /// reading from <see cref="CellCanvas.Input"/> already throws <see cref="OperationCanceledException"/> then.
     /// </summary>
+    /// <remarks>On Windows the window runs on a single-threaded apartment thread, which the clipboard needs. This works without <c>[STAThread]</c>, so top-level statements are fine.</remarks>
     /// <param name="program">The program to run.</param>
     /// <param name="options">Window and canvas settings; defaults are used if <see langword="null"/>.</param>
     /// <param name="args">Command-line arguments passed to Avalonia.</param>
@@ -19,10 +22,22 @@ public static class CanvasApp
     {
         ArgumentNullException.ThrowIfNull(program);
 
-        var application = new CanvasHostApplication(program, options ?? new CanvasAppOptions());
-        var exitCode = AppBuilder.Configure(() => application).UsePlatformDetect().StartWithClassicDesktopLifetime(args ?? []);
+        var settings = options ?? new CanvasAppOptions();
+        var arguments = args ?? [];
+        CanvasHostApplication? application = null;
 
-        application.Shutdown();
+        // Avalonia ties its objects to the thread that first uses them, so the application must be created on the thread that runs the window.
+        int StartWindow()
+        {
+            application = new CanvasHostApplication(program, settings);
+            return AppBuilder.Configure(() => application).UsePlatformDetect().StartWithClassicDesktopLifetime(arguments);
+        }
+
+        var exitCode = OperatingSystem.IsWindows() && Thread.CurrentThread.GetApartmentState() != ApartmentState.STA
+            ? RunOnStaThread(StartWindow)
+            : StartWindow();
+
+        application?.Shutdown();
         return exitCode;
     }
 
@@ -35,5 +50,31 @@ public static class CanvasApp
     {
         ArgumentNullException.ThrowIfNull(program);
         return Run(canvas => program(new TextTerminal(canvas)), options, args);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static int RunOnStaThread(Func<int> run)
+    {
+        var exitCode = 0;
+        ExceptionDispatchInfo? failure = null;
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                exitCode = run();
+            }
+            catch (Exception ex)
+            {
+                // Rethrown on the calling thread below, so the caller sees the failure as if it had run the window itself.
+                failure = ExceptionDispatchInfo.Capture(ex);
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        failure?.Throw();
+        return exitCode;
     }
 }

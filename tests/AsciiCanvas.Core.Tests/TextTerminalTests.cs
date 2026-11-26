@@ -125,6 +125,47 @@ public class TextTerminalTests
     }
 
     [Fact]
+    public async Task ReadLineAsync_PastedMultiLineText_InsertsTextWithLineBreaksAsSpaces()
+    {
+        using var canvas = new CellCanvas(30, 3);
+        var terminal = new TextTerminal(canvas);
+        Type(canvas, "a");
+        canvas.Input.Post(new PasteEvent("one\r\ntwo\nthree"));
+        Type(canvas, "z");
+        Press(canvas, Key.Enter);
+
+        var line = await terminal.ReadLineAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("aone two threez", line);
+    }
+
+    [Fact]
+    public async Task ReadKeyAsync_PasteEvent_ReturnsPastedTextAndSkipsEmptyPaste()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        var terminal = new TextTerminal(canvas);
+        canvas.Input.Post(new PasteEvent(""));
+        canvas.Input.Post(new PasteEvent("hi"));
+
+        var press = await terminal.ReadKeyAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(press.IsText);
+        Assert.Equal("hi", press.Text);
+    }
+
+    [Fact]
+    public async Task ReadKeyAsync_MetaShortcut_IsAnActionKey()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        var terminal = new TextTerminal(canvas);
+        Press(canvas, Key.S, KeyModifiers.Meta);
+
+        var press = await terminal.ReadKeyAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal((Key.S, KeyModifiers.Meta), (press.Key, press.Modifiers));
+    }
+
+    [Fact]
     public async Task ReadKeyAsync_CanvasClosed_ThrowsOperationCanceledException()
     {
         using var canvas = new CellCanvas(10, 2);

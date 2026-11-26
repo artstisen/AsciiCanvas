@@ -31,6 +31,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// <summary>Input from the user. Hosts post to it; programs read from it.</summary>
     public CanvasInput Input { get; } = new();
 
+    /// <summary>The system clipboard, if the host provides one. <see langword="null"/> otherwise (for example in tests).</summary>
+    public ICanvasClipboard? Clipboard { get; set; }
+
     /// <summary>Canceled when the host closes the canvas (for example, the window closes). Not usable after <see cref="Dispose"/>.</summary>
     public CancellationToken Closed => _closed.Token;
 

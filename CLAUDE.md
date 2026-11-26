@@ -19,8 +19,10 @@ src/
   AsciiCanvas.Avalonia/    CanvasView control, CanvasApp host, input mapping
 samples/
   AsciiCanvas.Demo/        demo app (run with --fill for fixed cell size)
+  AsciiCanvas.Editor/      text editor demo: EditorModel (pure text logic), EditorView, EditorApp
 tests/
-  AsciiCanvas.Core.Tests/  xUnit v3
+  AsciiCanvas.Core.Tests/    xUnit v3
+  AsciiCanvas.Editor.Tests/  xUnit v3, the editor's text model
 ```
 
 ## Commands
@@ -65,6 +67,10 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 - **Diagnostics are a feature of the grid**: `CanvasView.ShowDiagnostics` shows Avalonia's FPS/render graphs plus our own overlay (cells, draw ms, renders/s, from `RenderStatistics`); `AllowDiagnosticsToggle` makes F3 switch it at run time. Keep both off by default and keep F3 opt-in, so programs receive every key.
 - **The stress test is the benchmark** (demo menu item 6, run with `--fill --font-size=N`; measure in Release only). Baseline in the README: about 10 µs per cell per draw. Re-measure after changing `CellRenderer`, `RenderResources` or `CanvasView.Render`. Every `Present()` redraws the whole grid, so cost depends on grid size, not on how much changed. The glyph cache size is not the bottleneck (tested); the next candidate is drawing a run of cells as one glyph run instead of one text item per cell.
 - **A blink must not redraw an invisible cursor**: the blink timer only invalidates when the last frame had a visible cursor and the control has focus (a hidden cursor used to cost 38% of a core on a 29,000-cell grid).
+- **Paste and clipboard**: the host turns Ctrl+V, Cmd+V and Shift+Insert into a `PasteEvent` (`InterceptPasteShortcut`, default on); programs copy through `CellCanvas.Clipboard` (`ICanvasClipboard`), which can throw `ExternalException` when another program holds the clipboard, so callers catch it. `KeyModifiers.Meta` is Command; shortcuts should accept Control or Meta.
+- **`CanvasApp.Run` runs the window on an STA thread on Windows**: the Windows clipboard throws `CoInitialize has not been called` otherwise, and top-level statements cannot carry `[STAThread]`. The `Application` object must be created on that same thread (Avalonia binds its dispatcher to the creating thread), which is why `Run` builds it inside the thread's start function.
+- **The editor sample's model types are public** (`EditorModel`, `TextBuffer`, `TextMeasure`, `TextPosition`) only so `AsciiCanvas.Editor.Tests` can reach them without `InternalsVisibleTo`; the sample is not a library. Editing logic belongs in the model, drawing in `EditorView`, input handling in `EditorApp`.
+- **Known editor limits**: closing the window with unsaved changes does not prompt (programs cannot intercept window close), combining characters are separate cursor stops, no search.
 
 ## Reference files (read on demand, not loaded at start)
 

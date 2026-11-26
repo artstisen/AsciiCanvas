@@ -33,6 +33,7 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 Palette = options.Palette,
                 ShowDiagnostics = options.ShowDiagnostics,
                 AllowDiagnosticsToggle = options.AllowDiagnosticsToggle,
+                InterceptPasteShortcut = options.InterceptPasteShortcut,
             };
 
             if (options.FontFamily is { } family)

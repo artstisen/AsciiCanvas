@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/samples/">
     <Project Path="samples/AsciiCanvas.Demo/AsciiCanvas.Demo.csproj" />
+    <Project Path="samples/AsciiCanvas.Editor/AsciiCanvas.Editor.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AsciiCanvas.Avalonia/AsciiCanvas.Avalonia.csproj" />
@@ -8,5 +9,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AsciiCanvas.Core.Tests/AsciiCanvas.Core.Tests.csproj" />
+    <Project Path="tests/AsciiCanvas.Editor.Tests/AsciiCanvas.Editor.Tests.csproj" />
   </Folder>
 </Solution>

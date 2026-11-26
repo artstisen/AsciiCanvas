@@ -15,4 +15,7 @@ public enum KeyModifiers
 
     /// <summary>An Alt key is held.</summary>
     Alt = 4,
+
+    /// <summary>The Windows key or the Command key is held. On macOS, Command takes the role Control has elsewhere.</summary>
+    Meta = 8,
 }

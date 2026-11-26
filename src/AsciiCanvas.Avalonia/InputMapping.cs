@@ -33,13 +33,23 @@ internal static class InputMapping
             result |= KeyModifiers.Alt;
         }
 
+        if ((modifiers & AvaloniaKeyModifiers.Meta) != 0)
+        {
+            result |= KeyModifiers.Meta;
+        }
+
         return result;
     }
 
     /// <summary>Keys that must not also trigger Avalonia's own handling (focus movement and the like).</summary>
     public static bool ShouldHandle(Key key, KeyModifiers modifiers) =>
         key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Enter or Key.Escape
-        || (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) != 0;
+        || (modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0;
+
+    /// <summary>Ctrl+V and Cmd+V, plus the classic Shift+Insert.</summary>
+    public static bool IsPasteShortcut(Key key, KeyModifiers modifiers) =>
+        (key == Key.V && modifiers is KeyModifiers.Control or KeyModifiers.Meta)
+        || (key == Key.Insert && modifiers == KeyModifiers.Shift);
 
     /// <summary>Removes control characters from typed text; they arrive as key events instead.</summary>
     public static string FilterText(string? text)

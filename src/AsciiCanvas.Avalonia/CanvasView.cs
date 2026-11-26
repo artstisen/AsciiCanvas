@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Rendering;
@@ -47,6 +48,10 @@ public sealed class CanvasView : Control
     /// <summary>Identifies <see cref="AllowDiagnosticsToggle"/>.</summary>
     public static readonly StyledProperty<bool> AllowDiagnosticsToggleProperty =
         AvaloniaProperty.Register<CanvasView, bool>(nameof(AllowDiagnosticsToggle));
+
+    /// <summary>Identifies <see cref="InterceptPasteShortcut"/>.</summary>
+    public static readonly StyledProperty<bool> InterceptPasteShortcutProperty =
+        AvaloniaProperty.Register<CanvasView, bool>(nameof(InterceptPasteShortcut), true);
 
     private readonly CellGrid _frame = new(1, 1);
     private readonly RenderResources _resources = new();
@@ -152,6 +157,16 @@ public sealed class CanvasView : Control
         set => SetValue(AllowDiagnosticsToggleProperty, value);
     }
 
+    /// <summary>
+    /// When true (the default), Ctrl+V, Cmd+V and Shift+Insert read the clipboard and send the text to the program as a
+    /// <see cref="PasteEvent"/>; the key press itself is not sent. Set it to false to receive the raw key press instead.
+    /// </summary>
+    public bool InterceptPasteShortcut
+    {
+        get => GetValue(InterceptPasteShortcutProperty);
+        set => SetValue(InterceptPasteShortcutProperty, value);
+    }
+
     private double RenderScaling => TopLevel.GetTopLevel(this)?.RenderScaling ?? 1d;
 
     private (double Advance, double Height) FontMetrics => _fontMetrics ??= MeasureFont();
@@ -186,6 +201,7 @@ public sealed class CanvasView : Control
         base.OnAttachedToVisualTree(e);
         _attached = true;
         Canvas.Presented += OnPresented;
+        Canvas.Clipboard = new AvaloniaCanvasClipboard(this);
         UpdateBlinkTimer();
         ApplyRendererOverlays();
         Dispatcher.UIThread.Post(() => Focus(), DispatcherPriority.Input);
@@ -197,6 +213,7 @@ public sealed class CanvasView : Control
         base.OnDetachedFromVisualTree(e);
         _attached = false;
         Canvas.Presented -= OnPresented;
+        Canvas.Clipboard = null;
         _blinkTimer.Stop();
     }
 
@@ -212,9 +229,11 @@ public sealed class CanvasView : Control
                 if (change.OldValue is CellCanvas old)
                 {
                     old.Presented -= OnPresented;
+                    old.Clipboard = null;
                 }
 
                 Canvas.Presented += OnPresented;
+                Canvas.Clipboard = new AvaloniaCanvasClipboard(this);
             }
 
             ApplyFillSizing(Bounds.Size);
@@ -268,6 +287,13 @@ public sealed class CanvasView : Control
         {
             ShowDiagnostics = !ShowDiagnostics;
             e.Handled = true;
+            return;
+        }
+
+        if (InterceptPasteShortcut && InputMapping.IsPasteShortcut(key, modifiers))
+        {
+            e.Handled = true;
+            PasteFromClipboard();
             return;
         }
         RestartBlink();
@@ -459,6 +485,25 @@ public sealed class CanvasView : Control
             }
 
             x = end;
+        }
+    }
+
+    // An event handler cannot await, so this is async void; it must not throw.
+    private async void PasteFromClipboard()
+    {
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            var text = clipboard is null ? null : await clipboard.TryGetTextAsync();
+            if (!string.IsNullOrEmpty(text))
+            {
+                RestartBlink();
+                Canvas.Input.Post(new PasteEvent(text.ReplaceLineEndings("\n")));
+            }
+        }
+        catch (Exception)
+        {
+            // Another process can hold the clipboard; a paste that cannot be read simply does nothing.
         }
     }
 

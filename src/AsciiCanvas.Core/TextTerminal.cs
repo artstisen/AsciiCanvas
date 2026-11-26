@@ -258,9 +258,9 @@ public sealed class TextTerminal(CellCanvas canvas)
                 return true;
             case (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9):
                 // Ctrl+Alt is how some layouts type AltGr characters, which arrive as text instead.
-                var ctrl = (e.Modifiers & KeyModifiers.Control) != 0;
+                var command = (e.Modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
                 var alt = (e.Modifiers & KeyModifiers.Alt) != 0;
-                return ctrl != alt;
+                return command != alt;
             default:
                 return false;
         }
@@ -274,6 +274,9 @@ public sealed class TextTerminal(CellCanvas canvas)
             {
                 case TextEvent text:
                     return new KeyPress(Key.Unknown, text.Text, KeyModifiers.None);
+                case PasteEvent { Text.Length: > 0 } paste:
+                    // A line editor has one line, so line breaks in pasted text become spaces.
+                    return new KeyPress(Key.Unknown, paste.Text.ReplaceLineEndings(" "), KeyModifiers.None);
                 case KeyEvent key when IsActionKey(key):
                     return new KeyPress(key.Key, "", key.Modifiers);
                 case ResizeEvent:

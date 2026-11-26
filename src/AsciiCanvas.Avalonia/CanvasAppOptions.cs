@@ -37,4 +37,7 @@ public sealed class CanvasAppOptions
 
     /// <summary>Lets F3 switch the diagnostics on and off. The key is then not passed on to the program. See <see cref="CanvasView.AllowDiagnosticsToggle"/>.</summary>
     public bool AllowDiagnosticsToggle { get; init; }
+
+    /// <summary>Turns Ctrl+V, Cmd+V and Shift+Insert into a <see cref="PasteEvent"/>. See <see cref="CanvasView.InterceptPasteShortcut"/>.</summary>
+    public bool InterceptPasteShortcut { get; init; } = true;
 }

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AsciiCanvas.Editor</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AsciiCanvas.Avalonia\AsciiCanvas.Avalonia.csproj" />
+  </ItemGroup>
+
+</Project>
