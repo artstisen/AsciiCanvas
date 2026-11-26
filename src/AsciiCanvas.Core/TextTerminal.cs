@@ -20,6 +20,7 @@ public sealed class TextTerminal(CellCanvas canvas)
     private int _column;
     private int _row;
     private int _scrolls;
+    private long? _movedByResize; // RowsMovedUpByResize of the canvas when last seen (null: not yet)
 
     /// <summary>The canvas this terminal writes to. Its <see cref="CellCanvas.KeepCursorRowOnShrink"/> is turned on, so a shorter window keeps the line being written.</summary>
     public CellCanvas Canvas { get; } = KeepingCursorRow(canvas);
@@ -27,14 +28,48 @@ public sealed class TextTerminal(CellCanvas canvas)
     /// <summary>A <see cref="TextWriter"/> that writes to this terminal, e.g. for code that expects <c>Console.Out</c>.</summary>
     public TextWriter Out => field ??= new TerminalTextWriter(this);
 
+    /// <summary>
+    /// Rows above this terminal that it never writes to or scrolls: its text goes in the rows between <see cref="MarginTop"/> and
+    /// <see cref="MarginBottom"/>, which follow the canvas when it is resized. A margin that leaves no room keeps at least one row,
+    /// so <c>MarginTop = int.MaxValue</c> keeps the terminal on the last row. 0 by default. Only a region that starts at row 0
+    /// feeds the scrollback. Set it before writing.
+    /// </summary>
+    public int MarginTop { get; set; }
+
+    /// <summary>Rows below this terminal that it never writes to or scrolls (see <see cref="MarginTop"/>). 0 by default.</summary>
+    public int MarginBottom { get; set; }
+
+    /// <summary>
+    /// The style of this terminal's own text, when several terminals (or other drawing) share a canvas. <see langword="null"/>
+    /// (the default) writes with the canvas <see cref="CellCanvas.Pen"/>; when set, <see cref="Style"/> reads and changes this
+    /// style instead of the canvas pen.
+    /// </summary>
+    public CellStyle? Pen { get; set; }
+
+    /// <summary>
+    /// Raised on the reading thread when a read of this terminal takes a <see cref="ResizeEvent"/> from the input: the program
+    /// can redraw what it keeps outside the terminal's rows.
+    /// </summary>
+    public event Action? Resized;
+
     /// <summary>When true (the default), every write is presented immediately.</summary>
     public bool AutoPresent { get; set; } = true;
 
     /// <summary>The style of text written next. Same as <see cref="CellCanvas.Pen"/>.</summary>
     public CellStyle Style
     {
-        get => Canvas.Pen;
-        set => Canvas.Pen = value;
+        get => Pen ?? Canvas.Pen;
+        set
+        {
+            if (Pen is null)
+            {
+                Canvas.Pen = value;
+            }
+            else
+            {
+                Pen = value;
+            }
+        }
     }
 
     /// <summary>The column where the next character is written.</summary>
@@ -77,6 +112,7 @@ public sealed class TextTerminal(CellCanvas canvas)
                 if (input is ResizeEvent)
                 {
                     Constrain();
+                    Resized?.Invoke();
                 }
                 else
                 {
@@ -88,22 +124,32 @@ public sealed class TextTerminal(CellCanvas canvas)
         }
     }
 
-    /// <summary>Moves the cursor, clamped to the canvas.</summary>
+    /// <summary>Moves the cursor, clamped to the canvas (and to the rows between the margins).</summary>
     /// <param name="column">The column.</param>
-    /// <param name="row">The row.</param>
+    /// <param name="row">The row of the canvas.</param>
     public void SetCursorPosition(int column, int row)
     {
+        Constrain();
         _column = Math.Clamp(column, 0, Canvas.Columns);
-        _row = Math.Clamp(row, 0, Canvas.Rows - 1);
+        _row = Math.Clamp(row, RegionTop, RegionBottom - 1);
         Finish();
     }
 
-    /// <summary>Clears the canvas and moves the cursor to the top-left corner.</summary>
+    /// <summary>Clears the canvas (with margins: the rows between them) and moves the cursor to its top-left corner.</summary>
     public void Clear()
     {
-        Canvas.Clear();
+        Constrain();
+        if (MarginTop <= 0 && MarginBottom <= 0)
+        {
+            Canvas.Clear(Pen);
+        }
+        else
+        {
+            Canvas.Fill(Region, ' ', Pen);
+        }
+
         _column = 0;
-        _row = 0;
+        _row = RegionTop;
         Finish();
     }
 
@@ -138,15 +184,15 @@ public sealed class TextTerminal(CellCanvas canvas)
     /// <param name="style">The style to use for this text only.</param>
     public void Write(string text, CellStyle style)
     {
-        var previous = Canvas.Pen;
-        Canvas.Pen = style;
+        var previous = Style;
+        Style = style;
         try
         {
             Write(text);
         }
         finally
         {
-            Canvas.Pen = previous;
+            Style = previous;
         }
     }
 
@@ -155,15 +201,15 @@ public sealed class TextTerminal(CellCanvas canvas)
     /// <param name="style">The style to use for this text only.</param>
     public void WriteLine(string text, CellStyle style)
     {
-        var previous = Canvas.Pen;
-        Canvas.Pen = style;
+        var previous = Style;
+        Style = style;
         try
         {
             WriteLine(text);
         }
         finally
         {
-            Canvas.Pen = previous;
+            Style = previous;
         }
     }
 
@@ -291,6 +337,7 @@ public sealed class TextTerminal(CellCanvas canvas)
             if (input is ResizeEvent)
             {
                 Constrain();
+                Resized?.Invoke();
                 return null;
             }
 
@@ -356,16 +403,16 @@ public sealed class TextTerminal(CellCanvas canvas)
             NewLine();
         }
 
-        Canvas.SetCell(_column, _row, rune);
+        Canvas.SetCell(_column, _row, rune, Pen);
         _column += width;
     }
 
     private void NewLine()
     {
         _column = 0;
-        if (_row + 1 >= Canvas.Rows)
+        if (_row + 1 >= RegionBottom)
         {
-            Canvas.Scroll(Canvas.Bounds, 0, -1);
+            Canvas.Scroll(Region, 0, -1, Pen);
             _scrolls++;
         }
         else
@@ -374,7 +421,6 @@ public sealed class TextTerminal(CellCanvas canvas)
         }
     }
 
-    // Keeps the cursor valid if the canvas was resized behind our back. A column equal to Columns is a pending wrap.
     private static CellCanvas KeepingCursorRow(CellCanvas canvas)
     {
         ArgumentNullException.ThrowIfNull(canvas);
@@ -382,18 +428,31 @@ public sealed class TextTerminal(CellCanvas canvas)
         return canvas;
     }
 
+    // The first row this terminal writes in, and the row after its last (the margins, with at least one row left).
+    private int RegionTop => Math.Clamp(MarginTop, 0, Canvas.Rows - 1);
+
+    private int RegionBottom => Math.Max(RegionTop + 1, Canvas.Rows - Math.Max(0, MarginBottom));
+
+    private CellRect Region => new(0, RegionTop, Canvas.Columns, RegionBottom - RegionTop);
+
+    // Keeps the cursor valid if the canvas was resized behind our back: it moves up with content a shorter canvas moved up, and
+    // stays in the region. A column equal to Columns is a pending wrap.
     private void Constrain()
     {
+        var moved = Canvas.RowsMovedUpByResize;
+        _row -= (int)Math.Min(moved - (_movedByResize ?? moved), int.MaxValue);
+        _movedByResize = moved;
         _column = Math.Clamp(_column, 0, Canvas.Columns);
-        _row = Math.Clamp(_row, 0, Canvas.Rows - 1);
+        _row = Math.Clamp(_row, RegionTop, RegionBottom - 1);
     }
 
     private void RenderLine(LineEditor editor)
     {
+        Constrain();
         var columns = Canvas.Columns;
-        var rows = Canvas.Rows;
+        var rows = RegionBottom;
         editor.StartColumn = Math.Min(editor.StartColumn, columns - 1);
-        editor.StartRow = Math.Min(editor.StartRow, rows - 1);
+        editor.StartRow = Math.Clamp(editor.StartRow, RegionTop, rows - 1);
 
         _column = editor.StartColumn;
         _row = editor.StartRow;
@@ -420,7 +479,7 @@ public sealed class TextTerminal(CellCanvas canvas)
 
         if (row >= rows)
         {
-            Canvas.Scroll(Canvas.Bounds, 0, -1);
+            Canvas.Scroll(Region, 0, -1, Pen);
             editor.StartRow--;
             row--;
         }

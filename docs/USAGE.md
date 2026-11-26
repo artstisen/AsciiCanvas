@@ -275,6 +275,11 @@ as in a terminal:
 
 Leave scrollback off (the default for `Run`) in a full-screen program that uses the wheel or Shift+PageUp itself.
 
+A program with lines that must stay at the bottom (a status line, an input line) sets `canvas.ScrollbackPinnedRows` to their
+number. While the view is scrolled back, those rows stay where they are and the scrollback shows above them, and the cursor stays
+visible in them. When the canvas is resized, they stay at the bottom; with `KeepCursorRowOnShrink`, a smaller canvas first takes the
+blank rows above them (one is left, for the next line) and only then moves the top rows into the scrollback.
+
 ## Windows without a frame
 
 With `Frame = CanvasFrame.None` the window has no title bar and no border: the whole window is the canvas, and the program draws
@@ -356,6 +361,24 @@ return CanvasApp.RunTerminal(async terminal =>
 
 `terminal.Out` is a `TextWriter` for code that expects `Console.Out`, and `terminal.In` is a `TextReader` for `Console.In`
 (its `ReadLine` blocks until Enter, so use it from the program's thread). `terminal.Canvas` is the underlying canvas.
+
+### Several terminals on one canvas
+
+A `TextTerminal` can write in some of the rows only: `MarginTop` and `MarginBottom` are rows above and below it that it never writes
+to or scrolls. They follow the canvas when it is resized, and at least one row is always left, so `MarginTop = int.MaxValue` keeps a
+terminal on the last row. Only a terminal whose rows start at row 0 feeds the scrollback. `Pen` gives a terminal a style of its own
+(null: the canvas `Pen`), so two terminals on one canvas can write in different colors, and `Resized` is raised on the reading
+thread when a read takes a `ResizeEvent`, so the program can redraw what lies outside the terminals.
+
+```csharp
+var output = new TextTerminal(canvas) { MarginBottom = 2 };                  // scrolls above the last two rows
+var input = new TextTerminal(canvas) { MarginTop = int.MaxValue, Pen = new CellStyle(CellColor.BrightGreen) };
+canvas.ScrollbackPinnedRows = 2;                                             // a status line and the input line stay put
+input.Resized += () => canvas.HLine(0, canvas.Rows - 2, canvas.Columns);     // redraw the status line
+output.WriteLine("output scrolls here");
+var line = await input.ReadLineAsync("> ", cancellationToken: canvas.Closed);
+```
+
 
 A paste arrives as it does in a console. `ReadKeyAsync` returns the text of each pasted line with an `Enter` press for each line
 break. `ReadLineAsync` returns the first pasted line, and the following reads return the rest, one line each. `RunTerminal` turns on

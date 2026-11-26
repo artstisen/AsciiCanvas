@@ -235,6 +235,58 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         }
     }
 
+    /// <summary>
+    /// The number of rows at the bottom that stay in place while the view is scrolled back (<see cref="ScrollbackOffset"/>): a
+    /// status line or an input line that the program keeps below its scrolling text. 0 (the default) scrolls the whole canvas.
+    /// The scrollback then shows above those rows, and the cursor stays visible when it is in them.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is negative.</exception>
+    public int ScrollbackPinnedRows
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            bool viewChanged;
+            lock (_gate)
+            {
+                viewChanged = field != value && _scrollbackOffset > 0;
+                field = value;
+                if (viewChanged)
+                {
+                    _version++;
+                    _frameInfo = _frameInfo with { Version = _version };
+                }
+            }
+
+            if (viewChanged)
+            {
+                Presented?.Invoke();
+            }
+        }
+    }
+
+    // The rows the content has moved up in all by Resize (KeepCursorRowOnShrink), so a TextTerminal can move its own row with it.
+    internal long RowsMovedUpByResize
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        private set;
+    }
+
     /// <summary>The system clipboard, if the host provides one. <see langword="null"/> otherwise (for example in tests).</summary>
     public ICanvasClipboard? Clipboard { get; set; }
 
@@ -498,19 +550,18 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
                 return;
             }
 
-            // A terminal keeps the line it writes on: rows leave the top, rather than the cursor row leaving the bottom.
-            var shift = KeepCursorRowOnShrink ? _cursorRow - (rows - 1) : 0;
-            if (shift > 0)
+            var pinned = ScrollbackPinnedRows;
+            if (pinned > 0 && pinned < Math.Min(rows, _back.Rows))
             {
-                var whole = new CellRect(0, 0, _back.Columns, _back.Rows);
-                KeepRowsLeavingTheTop(shift);
-                var saved = CaptureCore(whole);
-                FillCore(whole, new Rune(' '), Pen, ignoreClip: true);
-                BlitCore(saved, saved.Bounds, 0, -shift, whole, skipBlanks: false);
-                _cursorRow -= shift;
+                ResizeKeepingPinnedRows(columns, rows, pinned);
+            }
+            else
+            {
+                // A terminal keeps the line it writes on: rows leave the top, rather than the cursor row leaving the bottom.
+                MoveUpForResize(KeepCursorRowOnShrink ? _cursorRow - (rows - 1) : 0, _back.Rows);
+                _back.Resize(columns, rows, Pen);
             }
 
-            _back.Resize(columns, rows, Pen);
             _clips.Clear();
             _cursorColumn = Math.Min(_cursorColumn, columns - 1);
             _cursorRow = Math.Min(_cursorRow, rows - 1);
@@ -559,8 +610,15 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             }
 
             ComposeScrolledView(destination);
+            var scrolledRows = ScrolledRows(_front.Rows);
+            if (_frameInfo.CursorRow >= scrolledRows)
+            {
+                // (in the pinned rows: it stays where it is)
+                return _frameInfo;
+            }
+
             var cursorRow = _frameInfo.CursorRow + _scrollbackOffset;
-            return _frameInfo with { CursorRow = Math.Min(cursorRow, _front.Rows - 1), CursorVisible = _frameInfo.CursorVisible && cursorRow < _front.Rows };
+            return _frameInfo with { CursorRow = Math.Min(cursorRow, _front.Rows - 1), CursorVisible = _frameInfo.CursorVisible && cursorRow < scrolledRows };
         }
     }
 
@@ -897,6 +955,78 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         return true;
     }
 
+    // Called under the lock: the pinned rows at the bottom stay at the bottom. The rows above them get fewer or more; with
+    // KeepCursorRowOnShrink, fewer rows first take the blank rows at the bottom of that part (one is left, for the next line
+    // written), and only then move its top rows into the scrollback.
+    private void ResizeKeepingPinnedRows(int columns, int rows, int pinned)
+    {
+        var pinnedTop = _back.Rows - pinned;
+        var bottom = CaptureCore(new CellRect(0, pinnedTop, _back.Columns, pinned));
+        var cursorPinned = _cursorRow >= pinnedTop;
+        var removed = pinnedTop - (rows - pinned);
+        if (removed > 0 && KeepCursorRowOnShrink)
+        {
+            var lowest = cursorPinned ? 0 : _cursorRow + 1;
+            var blank = 0;
+            while (blank < pinnedTop - lowest && IsBlankRow(pinnedTop - 1 - blank))
+            {
+                blank++;
+            }
+
+            var shift = removed - Math.Max(0, blank - 1);
+            if (!cursorPinned)
+            {
+                shift = Math.Max(shift, _cursorRow - (rows - pinned - 1));
+            }
+
+            MoveUpForResize(shift, pinnedTop);
+        }
+
+        FillCore(new CellRect(0, pinnedTop, _back.Columns, pinned), new Rune(' '), Pen, ignoreClip: true);
+        _back.Resize(columns, rows, Pen);
+        var target = new CellRect(0, rows - pinned, columns, pinned);
+        BlitCore(bottom, bottom.Bounds, 0, rows - pinned, target, skipBlanks: false);
+        if (cursorPinned)
+        {
+            _cursorRow += rows - pinned - pinnedTop;
+        }
+    }
+
+    // Called under the lock: moves the top `rows` rows of the region [0, height) into the scrollback and the rest up, for a resize.
+    private void MoveUpForResize(int shift, int height)
+    {
+        if (shift <= 0)
+        {
+            return;
+        }
+
+        var area = new CellRect(0, 0, _back.Columns, height);
+        KeepRowsLeavingTheTop(Math.Min(shift, height));
+        var saved = CaptureCore(area);
+        FillCore(area, new Rune(' '), Pen, ignoreClip: true);
+        BlitCore(saved, saved.Bounds, 0, -shift, area, skipBlanks: false);
+        if (_cursorRow < height)
+        {
+            _cursorRow -= shift;
+        }
+
+        RowsMovedUpByResize += shift;
+    }
+
+    // Called under the lock: a row of the back buffer with nothing written in it.
+    private bool IsBlankRow(int y)
+    {
+        foreach (var cell in _back.Row(y))
+        {
+            if (cell.Rune.Value is not (0 or ' '))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // Called under the lock before the top `count` rows of the back buffer scroll off the screen: they become scrollback at the next Present.
     private void KeepRowsLeavingTheTop(int count)
     {
@@ -932,11 +1062,15 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         _scrollbackOffset = (int)Math.Min(offset, _scrollback.Count);
     }
 
-    // Called under the lock: destination holds the front buffer; shift it down and put the scrollback rows above it.
+    // Called under the lock: the rows of the view that scroll back, above the pinned rows (at least one).
+    private int ScrolledRows(int rows) => Math.Max(1, rows - ScrollbackPinnedRows);
+
+    // Called under the lock: destination holds the front buffer; shift it down and put the scrollback rows above it. The pinned
+    // rows at the bottom keep the front buffer's rows.
     private void ComposeScrolledView(CellGrid destination)
     {
         var columns = destination.Columns;
-        var rows = destination.Rows;
+        var rows = ScrolledRows(destination.Rows);
         for (var y = rows - 1; y >= 0; y--)
         {
             var line = _scrollback.Count - _scrollbackOffset + y;
