@@ -1,0 +1,10 @@
+﻿{
+    "kit":  "CSharp Coding Kit",
+    "source":  "https://github.com/artstisen/csharp-coding-kit.git",
+    "commit":  "67babe8",
+    "installedAt":  "2026-11-26T11:44:56Z",
+    "projectTypes":  [
+                         "class-library"
+                     ],
+    "noWebApi":  true
+}
