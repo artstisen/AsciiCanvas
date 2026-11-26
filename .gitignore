@@ -10,3 +10,22 @@ desktop.ini
 # Claude Code local (per-user) settings
 .claude/settings.local.json
 artifacts/
+
+# Test and analysis output
+TestResults/
+inspect.xml
+*.trx
+*.coverage
+coverage*.xml
+
+# Secrets and keys: never committed (see CLAUDE.md, "Publishing safety")
+.env
+.env.*
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+appsettings.*.json
+*.nupkg
+*.snupkg

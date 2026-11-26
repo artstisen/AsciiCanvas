@@ -1,0 +1,47 @@
+#!/bin/sh
+# Refuses a push that would publish a private email address or a file that must stay local.
+# Enable once per clone:  git config core.hooksPath .githooks
+#
+# Every pushed commit must have this author and committer email (GitHub's no-reply address):
+allowed_email="46990511+artstisen@users.noreply.github.com"
+
+# Paths that must never be committed: build output, local settings, keys, secrets, reports.
+forbidden_paths='(^|/)(bin|obj|\.vs|\.vscode|\.idea|TestResults|artifacts)/|(^|/)\.claude/settings\.local\.json$|(^|/)\.env(\..*)?$|\.(user|suo|pfx|p12|snk|key|pem|nupkg|snupkg)$|(^|/)inspect\.xml$|(^|/)appsettings\.[^/]*\.json$'
+
+zero=0000000000000000000000000000000000000000
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac   # a branch deletion pushes nothing
+
+    if [ "$remote_sha" = "$zero" ]; then
+        range="$local_sha --not --remotes"                  # a new branch: everything not on the remote yet
+    else
+        range="$remote_sha..$local_sha"
+    fi
+
+    bad_emails=$(git log --format='%h %ae %ce' $range | awk -v ok="$allowed_email" '$2 != ok || $3 != ok')
+    if [ -n "$bad_emails" ]; then
+        echo "pre-push: these commits carry another email than $allowed_email:" >&2
+        echo "$bad_emails" | sed 's/^/  /' >&2
+        echo "  Fix: git config user.email $allowed_email, then rewrite them (see CLAUDE.md, 'Publishing safety')." >&2
+        status=1
+    fi
+
+    bad_files=$(git log --format= --name-only --diff-filter=AM $range | sort -u | grep -E "$forbidden_paths")
+    if [ -n "$bad_files" ]; then
+        echo "pre-push: these files must not be pushed:" >&2
+        echo "$bad_files" | sed 's/^/  /' >&2
+        status=1
+    fi
+
+    # The hook itself is left out: it contains the patterns.
+    secrets=$(git log -p --format='%h' $range -- . ':(exclude).githooks' | grep -nE '^\+.*(ghp_|gho_|github_pat_|BEGIN [A-Z ]*PRIVATE KEY|AccountKey=)' | head -5)
+    if [ -n "$secrets" ]; then
+        echo "pre-push: these added lines look like secrets:" >&2
+        echo "$secrets" | sed 's/^/  /' >&2
+        status=1
+    fi
+done
+
+exit $status

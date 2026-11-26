@@ -84,6 +84,22 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 - **Windows PowerShell 5.1 reads UTF-8 files without a BOM as ANSI**: never rewrite source files containing non-ASCII characters (box-drawing, CJK, `█`) with `Get-Content`/`Set-Content` there; use the edit tool.
 - **GUI test scripts**: `shot2.ps1` calls `ShowWindow(SW_RESTORE)` while focusing, which un-maximizes a maximized window, so use a plain `CopyFromScreen` of the window rect when testing maximize. Parallel tool calls that edit and build in one batch can build before the edits land; build in a separate call.
 
+## Publishing safety
+
+The repository is on GitHub (private for now; it may become public, and then the whole history is public). Nothing private goes up:
+
+- **Only the GitHub no-reply address**, `46990511+artstisen@users.noreply.github.com`, as author and committer email. Never a
+  private or work address, and never write those addresses (or their domains) into files or messages. Each clone sets it with `git config user.email 46990511+artstisen@users.noreply.github.com`;
+  check `git config user.email` before committing, because this machine's global email is the private one.
+- **The pre-push hook enforces it**: `.githooks/pre-push` refuses commits with another email, files that must stay local, and
+  secret-like lines. Enable it once per clone with `git config core.hooksPath .githooks`. Never bypass it (`--no-verify`); fix the cause.
+- **Before every commit and push**, check what goes up: `git status` and the diff for build output, `.claude/settings.local.json`,
+  keys (`*.pfx`, `*.snk`, `*.pem`), `.env`, tokens, `inspect.xml`, screenshots or logs with personal data, and personal details in
+  messages or files. New kinds of local files go into `.gitignore` in the same change.
+- **Push only `main` (and feature branches)**, never `--all` or `--mirror`: `refs/agents/...` holds another tool's local checkpoints.
+- **A commit with a wrong email** is fixed before pushing by rewriting it (`git filter-branch --env-filter` setting `GIT_AUTHOR_EMAIL`
+  and `GIT_COMMITTER_EMAIL`, on the unpushed range only). Once pushed, rewriting needs a force push; ask first.
+
 ## Reference files (read on demand, not loaded at start)
 
 - `.claude/csharp-coding-kit/reference/antipatterns.md` — BAD/GOOD catalog; use when reviewing code
