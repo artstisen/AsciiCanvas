@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/AsciiCanvas.ConsolePort/AsciiCanvas.ConsolePort.csproj" />
     <Project Path="samples/AsciiCanvas.Demo/AsciiCanvas.Demo.csproj" />
     <Project Path="samples/AsciiCanvas.Editor/AsciiCanvas.Editor.csproj" />
   </Folder>

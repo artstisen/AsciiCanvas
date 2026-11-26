@@ -15,6 +15,8 @@ to build it, see the [README](../README.md). The code samples here were built an
 - Typing a printable key produces **both** a `KeyEvent` and a `TextEvent`. Use `TextEvent` for text and `KeyEvent` for
   shortcuts and navigation, never both for the same thing.
 - One rune per cell. East Asian wide characters and emoji take two cells. There are no combining characters.
+- A program that already uses `Console` (WriteLine, ReadLine, ReadKey, colors, cursor placement) can run on a canvas with one alias
+  line in its `.csproj` and `CanvasApp.RunTerminal`; see "Porting a console program".
 - `CellCanvas` is thread-safe. The program runs on a background thread; the window runs on the UI thread.
 - Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time. `Frame = CanvasFrame.None`
   removes the OS title bar and border so the program draws its own (see "Windows without a frame").
@@ -308,7 +310,59 @@ return CanvasApp.RunTerminal(async terminal =>
 });
 ```
 
-`terminal.Out` is a `TextWriter` for code that expects `Console.Out`. `terminal.Canvas` is the underlying canvas.
+`terminal.Out` is a `TextWriter` for code that expects `Console.Out`, and `terminal.In` is a `TextReader` for `Console.In`
+(its `ReadLine` blocks until Enter, so use it from the program's thread). `terminal.Canvas` is the underlying canvas.
+
+## Porting a console program
+
+A program that uses `Console` can move to a canvas window without changing its code. `TerminalConsole` has the same members as
+`System.Console` for what a text program uses, and `CanvasApp.RunTerminal` attaches it to the window's terminal. Two steps:
+
+1. Add an alias to the program's `.csproj`, so every `Console` in the project means `TerminalConsole`:
+
+   ```xml
+   <ItemGroup>
+     <Using Include="AsciiCanvas.TerminalConsole" Alias="Console" />
+   </ItemGroup>
+   ```
+
+2. Start the program from `RunTerminal` instead of `Main`:
+
+   ```csharp
+   return CanvasApp.RunTerminal(
+       _ => { ClassicProgram.Run(); return Task.CompletedTask; },
+       new CanvasAppOptions { Title = "My program", Sizing = CanvasSizing.FillWithCells, CloseWindowWhenProgramEnds = true },
+       args);
+   ```
+
+`samples/AsciiCanvas.ConsolePort` is a complete example: its `ClassicProgram.cs` is ordinary console code (prompt, arrow-key menu
+with `ReadKey`, colors, cursor placement, a long wrapped line, an in-place progress bar) and compiles unchanged against the real console.
+
+What works: `Write` and `WriteLine` with all their overloads and format strings, `ReadLine`, `Read`, `ReadKey` (with
+`intercept`, returning a real `ConsoleKeyInfo`), `KeyAvailable`, `ForegroundColor`, `BackgroundColor`, `ResetColor`, `Clear`,
+`CursorLeft`, `CursorTop`, `SetCursorPosition`, `GetCursorPosition`, `CursorVisible`, `WindowWidth`, `WindowHeight`, `BufferWidth`,
+`BufferHeight`, `Title`, `In`, `Out` and `Error`. Long lines wrap at the window width, and wide characters take two cells.
+
+What differs:
+
+- **Reads block the calling thread.** That is fine on the program's own thread, which is where `RunTerminal` runs it. When the user
+  closes the window, a pending read throws `OperationCanceledException`, which `Run` treats as a normal end.
+- **Use `Sizing = CanvasSizing.FillWithCells`** if the program should see the real window size. `WindowWidth` and `WindowHeight` are the
+  canvas's columns and rows, and with that sizing they follow the window; read them again after the user may have resized it.
+- **No ANSI escape sequences.** The canvas does not interpret `\e[31m`; use `ForegroundColor` and `BackgroundColor`. Libraries that
+  print escape codes (Spectre.Console and the like) will show them as text.
+- **Colors are the 16 `ConsoleColor` values.** Reading `ForegroundColor` gives `Gray` until the program sets one.
+- **A cursor position outside the window is moved to the nearest edge** instead of throwing.
+- **`Console.CancelKeyPress` does not exist.** Ctrl+C arrives as a key press (`ReadKey` returns `C` with Control). A program that
+  uses the event must be changed. `TreatControlCAsInput` is accepted and ignored.
+- **No scrollback.** Lines that scroll off the top are gone.
+- **A newline at the bottom of the window scrolls with the current background color**, as a real terminal does, so reset colors
+  before the last `WriteLine` of a highlighted line.
+- **Redirection and encodings.** `IsOutputRedirected` and its relatives are always false, and `OutputEncoding` is accepted and ignored.
+- The attached terminal is static: one canvas window per process.
+
+Without `RunTerminal`, call `TerminalConsole.Attach(terminal)` yourself. To route code that calls the real `System.Console` (a library,
+for example) to the canvas, use `System.Console.SetOut(terminal.Out)` and `System.Console.SetIn(terminal.In)` (spelled out, because in a project with the alias `Console` means `TerminalConsole`).
 
 ## Using the control in your own Avalonia application
 

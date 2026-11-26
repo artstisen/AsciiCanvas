@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>AsciiCanvas.ConsolePort</RootNamespace>
+    <ApplicationIcon>..\..\src\AsciiCanvas.Avalonia\Assets\Icons\AsciiCanvas.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AsciiCanvas.Avalonia\AsciiCanvas.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- This one line is the whole port: every Console.WriteLine, ReadKey, ForegroundColor... in the project now goes to the canvas. -->
+    <Using Include="AsciiCanvas.TerminalConsole" Alias="Console" />
+  </ItemGroup>
+
+</Project>

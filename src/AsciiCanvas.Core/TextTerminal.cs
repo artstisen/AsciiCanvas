@@ -13,6 +13,7 @@ public sealed class TextTerminal(CellCanvas canvas)
     private const int TabSize = 8;
 
     private readonly List<string> _history = [];
+    private KeyPress? _pending;
     private int _column;
     private int _row;
     private int _scrolls;
@@ -55,6 +56,34 @@ public sealed class TextTerminal(CellCanvas canvas)
 
     /// <summary>The lines returned by <see cref="ReadLineAsync"/>, oldest first (not including masked input).</summary>
     public IReadOnlyList<string> History => _history;
+
+    /// <summary>
+    /// A <see cref="TextReader"/> for code that expects <c>Console.In</c>. Its <c>ReadLine</c> blocks until the user presses Enter,
+    /// so use it from the program's own thread, never from the UI thread. It throws <see cref="OperationCanceledException"/> when
+    /// the canvas is closed.
+    /// </summary>
+    public TextReader In => field ??= new TerminalTextReader(this);
+
+    /// <summary>True when a key press or typed text is waiting, so <see cref="ReadKeyAsync"/> would return at once.</summary>
+    public bool KeyAvailable
+    {
+        get
+        {
+            while (_pending is null && Canvas.Input.TryRead(out var input))
+            {
+                if (input is ResizeEvent)
+                {
+                    Constrain();
+                }
+                else
+                {
+                    _pending = Translate(input);
+                }
+            }
+
+            return _pending is not null;
+        }
+    }
 
     /// <summary>Moves the cursor, clamped to the canvas.</summary>
     /// <param name="column">The column.</param>
@@ -268,25 +297,39 @@ public sealed class TextTerminal(CellCanvas canvas)
 
     private async ValueTask<KeyPress?> ReadKeyOrResizeAsync(CancellationToken cancellationToken)
     {
+        if (_pending is { } waiting)
+        {
+            _pending = null;
+            return waiting;
+        }
+
         while (true)
         {
-            switch (await Canvas.Input.ReadAsync(cancellationToken).ConfigureAwait(false))
+            var input = await Canvas.Input.ReadAsync(cancellationToken).ConfigureAwait(false);
+            if (input is ResizeEvent)
             {
-                case TextEvent text:
-                    return new KeyPress(Key.Unknown, text.Text, KeyModifiers.None);
-                case PasteEvent { Text.Length: > 0 } paste:
-                    // A line editor has one line, so line breaks in pasted text become spaces.
-                    return new KeyPress(Key.Unknown, paste.Text.ReplaceLineEndings(" "), KeyModifiers.None);
-                case KeyEvent key when IsActionKey(key):
-                    return new KeyPress(key.Key, "", key.Modifiers);
-                case ResizeEvent:
-                    Constrain();
-                    return null;
+                Constrain();
+                return null;
+            }
+
+            if (Translate(input) is { } press)
+            {
+                return press;
             }
 
             // Mouse input and key presses that also arrive as text are skipped.
         }
     }
+
+    private static KeyPress? Translate(InputEvent input) => input switch
+    {
+        TextEvent text => new KeyPress(Key.Unknown, text.Text, KeyModifiers.None),
+
+        // A line editor has one line, so line breaks in pasted text become spaces.
+        PasteEvent { Text.Length: > 0 } paste => new KeyPress(Key.Unknown, paste.Text.ReplaceLineEndings(" "), KeyModifiers.None),
+        KeyEvent key when IsActionKey(key) => new KeyPress(key.Key, "", key.Modifiers),
+        _ => null,
+    };
 
     private void WriteCore(ReadOnlySpan<char> text)
     {

@@ -41,7 +41,10 @@ public static class CanvasApp
         return exitCode;
     }
 
-    /// <summary>Like <see cref="Run"/> but hands the program a console-like <see cref="TextTerminal"/>.</summary>
+    /// <summary>
+    /// Like <see cref="Run"/> but hands the program a console-like <see cref="TextTerminal"/>. The terminal is also attached to
+    /// <see cref="TerminalConsole"/> while the program runs, so code that calls <c>Console</c> through an alias works unchanged.
+    /// </summary>
     /// <param name="program">The program to run.</param>
     /// <param name="options">Window and canvas settings; defaults are used if <see langword="null"/>.</param>
     /// <param name="args">Command-line arguments passed to Avalonia.</param>
@@ -49,7 +52,22 @@ public static class CanvasApp
     public static int RunTerminal(Func<TextTerminal, Task> program, CanvasAppOptions? options = null, string[]? args = null)
     {
         ArgumentNullException.ThrowIfNull(program);
-        return Run(canvas => program(new TextTerminal(canvas)), options, args);
+        return Run(
+            async canvas =>
+            {
+                var terminal = new TextTerminal(canvas);
+                TerminalConsole.Attach(terminal);
+                try
+                {
+                    await program(terminal).ConfigureAwait(false);
+                }
+                finally
+                {
+                    TerminalConsole.Detach(terminal);
+                }
+            },
+            options,
+            args);
     }
 
     [SupportedOSPlatform("windows")]

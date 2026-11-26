@@ -8,6 +8,7 @@ there are no escape sequences or processes, just a canvas programs draw on and a
 | `src/AsciiCanvas.Core` | UI-independent model: `CellCanvas` (drawing, cursor, `CanvasInput`), `TextTerminal` (console-like output and `ReadLineAsync`), colors, box drawing, layout math |
 | `src/AsciiCanvas.Avalonia` | `CanvasView` control and `CanvasApp` (one-call window host) built on Avalonia |
 | `samples/AsciiCanvas.Demo` | Demo with colors, boxes, a terminal, mouse paint, Unicode and a stress test |
+| `samples/AsciiCanvas.ConsolePort` | An ordinary console program (menu, colors, cursor placement, `ReadKey`) running on the canvas through one alias line |
 | `samples/AsciiCanvas.Editor` | A cross-platform text editor drawn on the canvas like a TUI: menu bar, file browser, dialogs, selection, clipboard, undo; builds as a single executable |
 | `tests/AsciiCanvas.Core.Tests` | xUnit v3 tests for the core |
 | `tests/AsciiCanvas.Editor.Tests` | xUnit v3 tests for the editor's text model, file browser and menu |
@@ -28,6 +29,7 @@ sizing, console-style programs, hosting `CanvasView` in your own Avalonia app, a
 
 * **Drawing** goes to a back buffer; `Present()` publishes it, so partial frames are never shown. All members are thread-safe.
 * **Window title and icon**: `CanvasAppOptions.Title` and `CanvasAppOptions.Icon` (PNG or ICO bytes) set the initial ones, and `canvas.Title = "..."` / `canvas.Icon = bytes` change them at any time. Without an icon the window shows the AsciiCanvas icon (set `UseExecutableIcon` to show the executable's icon instead, on Windows).
+* **Console programs**: `TerminalConsole` is a drop-in for `System.Console` over a `TextTerminal` (`Write`/`WriteLine`, `ReadLine`, `ReadKey`, colors, cursor position, window size). Add `<Using Include="AsciiCanvas.TerminalConsole" Alias="Console" />` to a console project, start it with `CanvasApp.RunTerminal`, and the program runs on the canvas unchanged. See [docs/USAGE.md](docs/USAGE.md) and `samples/AsciiCanvas.ConsolePort`.
 * **Windows without a frame**: `CanvasAppOptions.Frame = CanvasFrame.None` removes the title bar and border, so the program draws its own with cells: `canvas.WindowDragRegions` marks the cells that move the window, `canvas.WindowState` minimizes, maximizes and restores it, and the outer pixels of the window resize it. The editor sample shows it (`--frameless`). See [docs/USAGE.md](docs/USAGE.md).
 * **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `PasteEvent`, `MouseEvent` (cell coordinates), `ResizeEvent`, `WindowStateEvent` and `CloseRequestedEvent`.
 * **Resize and close events**: `ResizeEvent` is sent whenever the grid changes size, which with `CanvasSizing.FillWithCells` happens whenever the window is resized (with `ScaleToFit` the grid keeps its size, so there is nothing to report). `CloseRequestedEvent` is sent when the user tries to close the window, but only if the program has set `canvas.InterceptClose = true`; the window then stays open until the program calls `canvas.Exit()`, so it can ask about unsaved changes first. A program that sets `InterceptClose` must keep reading input.
