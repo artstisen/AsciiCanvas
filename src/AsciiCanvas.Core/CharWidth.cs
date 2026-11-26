@@ -29,7 +29,7 @@ public static class CharWidth
     public static int Of(Rune rune)
     {
         var v = rune.Value;
-        if (v < 0x20 || (v >= 0x7F && v < 0xA0))
+        if (v is < 0x20 or (>= 0x7F and < 0xA0))
         {
             return 0;
         }

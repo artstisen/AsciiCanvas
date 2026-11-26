@@ -31,6 +31,8 @@ dotnet test                              # xUnit v3 runs on Microsoft.Testing.Pl
 dotnet format --verify-no-changes
 dotnet list package --vulnerable --include-transitive
 dotnet run --project samples/AsciiCanvas.Demo
+dotnet tool restore                      # once: installs the pinned ReSharper command-line tools
+dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNING --output=inspect.xml   # build first; do not commit inspect.xml
 ```
 
 ## Style enforcement
@@ -39,6 +41,7 @@ dotnet run --project samples/AsciiCanvas.Demo
 - `dotnet format --verify-no-changes` also checks naming; run it before committing.
 - Packages are versioned in `Directory.Packages.props` only.
 - `Core` is `IsAotCompatible`: no unguarded reflection there.
+- **Accepted ReSharper findings** (ReSharper sees only this solution, so it misjudges public API): `UnusedMember.Global`, `MemberCanBePrivate.Global`, `PropertyCanBeMadeInitOnly.Global` on `CanvasView`, `NotAccessedPositionalProperty` on the event records and `GlyphKey` (a dictionary key), `UnusedMethodReturnValue` on `CellGrid.Put`, `RedundantArgumentDefaultValue` where the default is stated on purpose, `RedundantAssignment` on `color` in the paint demo (a local function reads it), and `MethodHasAsyncOverload` on `TextWriter.WriteLine`. The `var` hints (`SuggestVarOrType_*`) follow ReSharper's defaults, not the kit. Anything else is worth fixing.
 
 ## Project conventions and overrides
 

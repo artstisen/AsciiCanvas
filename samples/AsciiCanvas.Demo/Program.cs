@@ -1,4 +1,3 @@
-using AsciiCanvas;
 using AsciiCanvas.Avalonia;
 using AsciiCanvas.Demo;
 

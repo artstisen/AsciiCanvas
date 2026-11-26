@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <Description>Core model of AsciiCanvas: a thread-safe grid of character cells with drawing, input events and a console-like text layer. Has no UI dependency.</Description>
+    <RootNamespace>AsciiCanvas</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>

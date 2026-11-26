@@ -1,7 +1,6 @@
 using System.Text;
 using Avalonia;
 using Avalonia.Media;
-using Avalonia.Media.Immutable;
 
 namespace AsciiCanvas.Avalonia;
 
