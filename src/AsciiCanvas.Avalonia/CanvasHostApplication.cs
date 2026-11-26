@@ -16,6 +16,7 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
     private CellCanvas? _canvas;
     private Task? _programTask;
     private ExceptionDispatchInfo? _failure;
+    private bool _allowClose;
 
     public override void Initialize() => Styles.Add(new FluentTheme());
 
@@ -48,7 +49,17 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 SizeToContent = SizeToContent.WidthAndHeight,
                 Background = new SolidColorBrush(Color.FromUInt32(0xFF000000 | options.Palette.DefaultBackground)),
             };
+            window.Closing += (_, e) =>
+            {
+                // A program that intercepts closing answers the request itself, by calling Exit.
+                if (!Volatile.Read(ref _allowClose) && canvas.InterceptClose)
+                {
+                    e.Cancel = true;
+                    canvas.Input.Post(new CloseRequestedEvent());
+                }
+            };
             window.Closed += (_, _) => canvas.Close();
+            canvas.ExitRequested += () => Dispatcher.UIThread.Post(() => CloseWindow(window));
             desktop.MainWindow = window;
 
             _canvas = canvas;
@@ -87,9 +98,17 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
             failed = true;
         }
 
+        // Nobody is left to answer a close request, so from here on the window may close freely.
+        Volatile.Write(ref _allowClose, true);
         if (failed || options.CloseWindowWhenProgramEnds)
         {
-            Dispatcher.UIThread.Post(window.Close);
+            Dispatcher.UIThread.Post(() => CloseWindow(window));
         }
+    }
+
+    private void CloseWindow(Window window)
+    {
+        Volatile.Write(ref _allowClose, true);
+        window.Close();
     }
 }

@@ -6,7 +6,7 @@ namespace AsciiCanvas.Editor;
 /// <summary>Draws an <see cref="EditorModel"/> on a canvas: a title bar, line numbers, the text with selection, a scroll bar and a status line.</summary>
 internal sealed class EditorView
 {
-    private const string HelpText = " ^S Save  ^Q Quit  ^Z/^Y Undo/Redo  ^C/^X/^V Copy/Cut/Paste  ^A Select all  F3 Diagnostics";
+    private const string HelpText = " F10 Menu  ^N New  ^O Open  ^S Save  ^Q Exit  ^Z/^Y Undo/Redo  ^C/^X/^V Copy/Cut/Paste  F3 Stats";
 
     private static readonly CellStyle _currentLine = new(CellColor.Default, CellColor.Gray(3));
     private static readonly CellStyle _selection = new(CellColor.BrightWhite, CellColor.Blue);
@@ -29,15 +29,22 @@ internal sealed class EditorView
     /// <summary>The number of text lines that fit on the screen.</summary>
     public int PageSize => _text.Height;
 
+    /// <summary>Scrolls back to the top left, for a newly loaded document.</summary>
+    public void Reset()
+    {
+        TopLine = 0;
+        LeftColumn = 0;
+    }
+
     /// <summary>Scrolls the view without moving the caret.</summary>
     /// <param name="model">The document.</param>
     /// <param name="lines">Lines to scroll; positive moves down.</param>
     public void Scroll(EditorModel model, int lines) => TopLine = Math.Clamp(TopLine + lines, 0, model.Buffer.LineCount - 1);
 
-    /// <summary>Draws everything and presents the frame.</summary>
+    /// <summary>Draws the text area, line numbers, scroll bar and status lines. The caller draws the menu bar and presents the frame.</summary>
     /// <param name="canvas">The canvas to draw on.</param>
     /// <param name="model">The document.</param>
-    /// <param name="chrome">Title, message and prompt.</param>
+    /// <param name="chrome">The message and line ending to show.</param>
     /// <param name="followCaret">True to scroll so the caret is visible.</param>
     public void Draw(CellCanvas canvas, EditorModel model, EditorChrome chrome, bool followCaret)
     {
@@ -53,7 +60,6 @@ internal sealed class EditorView
         canvas.Pen = default;
         canvas.Clear();
 
-        DrawTitle(canvas, chrome);
         var caretLine = model.Caret.Line;
         for (var row = 0; row < _text.Height; row++)
         {
@@ -68,8 +74,7 @@ internal sealed class EditorView
         DrawScrollBar(canvas, model);
         canvas.Write(0, canvas.Rows - 2, HelpText, _help);
         DrawStatus(canvas, model, chrome);
-        PlaceCursor(canvas, model, chrome);
-        canvas.Present();
+        PlaceCursor(canvas, model);
     }
 
     /// <summary>Finds the text position under a grid cell.</summary>
@@ -111,12 +116,6 @@ internal sealed class EditorView
         {
             LeftColumn = column - _text.Width + 1;
         }
-    }
-
-    private static void DrawTitle(CellCanvas canvas, EditorChrome chrome)
-    {
-        canvas.Fill(new CellRect(0, 0, canvas.Columns, 1), ' ', _bar);
-        canvas.Write(1, 0, "AsciiCanvas Editor - " + chrome.Title, _bar);
     }
 
     private void DrawGutter(CellCanvas canvas, int line, int y, bool isCaretLine)
@@ -200,12 +199,6 @@ internal sealed class EditorView
         var y = canvas.Rows - 1;
         canvas.Fill(new CellRect(0, y, canvas.Columns, 1), ' ', _bar);
 
-        if (chrome.Prompt is not null)
-        {
-            canvas.Write(1, y, chrome.Prompt + chrome.PromptInput, _bar);
-            return;
-        }
-
         var caret = model.Caret;
         var left = chrome.Message
             ?? string.Create(CultureInfo.InvariantCulture, $"Ln {caret.Line + 1}, Col {model.DisplayColumn(caret) + 1}")
@@ -216,15 +209,8 @@ internal sealed class EditorView
         canvas.Write(Math.Max(canvas.Columns - CharWidth.Of(right), CharWidth.Of(left) + 3), y, right, _bar);
     }
 
-    private void PlaceCursor(CellCanvas canvas, EditorModel model, EditorChrome chrome)
+    private void PlaceCursor(CellCanvas canvas, EditorModel model)
     {
-        if (chrome.Prompt is not null)
-        {
-            canvas.CursorVisible = true;
-            canvas.SetCursor(1 + CharWidth.Of(chrome.Prompt) + CharWidth.Of(chrome.PromptInput), canvas.Rows - 1);
-            return;
-        }
-
         var x = _text.X + model.DisplayColumn(model.Caret) - LeftColumn;
         var y = _text.Y + model.Caret.Line - TopLine;
         var inside = x >= _text.X && x < _text.Right && y >= _text.Y && y < _text.Bottom;

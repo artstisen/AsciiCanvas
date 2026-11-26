@@ -8,9 +8,9 @@ there are no escape sequences or processes, just a canvas programs draw on and a
 | `src/AsciiCanvas.Core` | UI-independent model: `CellCanvas` (drawing, cursor, `CanvasInput`), `TextTerminal` (console-like output and `ReadLineAsync`), colors, box drawing, layout math |
 | `src/AsciiCanvas.Avalonia` | `CanvasView` control and `CanvasApp` (one-call window host) built on Avalonia |
 | `samples/AsciiCanvas.Demo` | Demo with colors, boxes, a terminal, mouse paint, Unicode and a stress test |
-| `samples/AsciiCanvas.Editor` | A cross-platform text editor drawn on the canvas: selection, clipboard, undo, mouse, file open/save |
+| `samples/AsciiCanvas.Editor` | A cross-platform text editor drawn on the canvas like a TUI: menu bar, file browser, dialogs, selection, clipboard, undo; builds as a single executable |
 | `tests/AsciiCanvas.Core.Tests` | xUnit v3 tests for the core |
-| `tests/AsciiCanvas.Editor.Tests` | xUnit v3 tests for the editor's text model |
+| `tests/AsciiCanvas.Editor.Tests` | xUnit v3 tests for the editor's text model, file browser and menu |
 
 ```csharp
 CanvasApp.Run(async canvas =>
@@ -24,7 +24,8 @@ CanvasApp.Run(async canvas =>
 ```
 
 * **Drawing** goes to a back buffer; `Present()` publishes it, so partial frames are never shown. All members are thread-safe.
-* **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `PasteEvent`, `MouseEvent` (cell coordinates) and `ResizeEvent`.
+* **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `PasteEvent`, `MouseEvent` (cell coordinates), `ResizeEvent` and `CloseRequestedEvent`.
+* **Resize and close events**: `ResizeEvent` is sent whenever the grid changes size, which with `CanvasSizing.FillWithCells` happens whenever the window is resized (with `ScaleToFit` the grid keeps its size, so there is nothing to report). `CloseRequestedEvent` is sent when the user tries to close the window, but only if the program has set `canvas.InterceptClose = true`; the window then stays open until the program calls `canvas.Exit()`, so it can ask about unsaved changes first. A program that sets `InterceptClose` must keep reading input.
 * **Paste and clipboard**: Ctrl+V, Cmd+V and Shift+Insert make the host read the clipboard and send the text as one `PasteEvent` (multi-line text included, line breaks as `\n`); set `CanvasView.InterceptPasteShortcut` / `CanvasAppOptions.InterceptPasteShortcut` to false to get the raw key press instead. Programs copy and cut through `canvas.Clipboard` (`ICanvasClipboard`: `GetTextAsync`, `SetTextAsync`), which does not depend on the UI framework. `KeyModifiers.Meta` is the Command key, so a Mac program can accept `Control` or `Meta` for its shortcuts. `TextTerminal.ReadLineAsync` accepts pasted text.
 * **Scaling**: `CanvasSizing.ScaleToFit` keeps the column/row count and scales cells and font; `CanvasSizing.FillWithCells` keeps the cell size and changes the column/row count (the program receives a `ResizeEvent`). Use `canvas.Resize(columns, rows)` to change the grid size from the program.
 * **Colors** are the 16/256 palette (`CellColor`), mapped to RGB by a `ColorPalette` (`Campbell` by default).
@@ -35,15 +36,32 @@ Run the demo with `dotnet run --project samples/AsciiCanvas.Demo` (add `-- --fil
 
 ## Text editor demo
 
-`samples/AsciiCanvas.Editor` shows the canvas used for a real tool: a text editor with line numbers, a scroll bar, selection with Shift+arrows or the mouse, word and document movement, undo and redo, auto-indent, tabs, wide characters, and copy, cut and paste through the system clipboard. It opens a file given on the command line, or starts with a short welcome text.
+`samples/AsciiCanvas.Editor` shows the canvas used for a real tool, drawn entirely with cells, like a text-mode (TUI) program. No native controls are involved: the window holds one canvas.
+
+* **Menu bar** (click, or F10 / Alt+F / Alt+E): File (New, Open..., Save, Save As..., Exit) and Edit (Undo, Redo, Cut, Copy, Paste, Select All), with shortcuts shown and unavailable entries dimmed.
+* **File browser** for Open and Save As: the folder, a scrollable list of folders and files with sizes, a name field and buttons. Click an entry to select it and click again to open it, or use the arrow keys, Enter, typing and Backspace (up a folder). On Windows, going up from a drive root lists the drives. Open accepts text files only: a file with binary data, or over 32 MB, is refused with a message.
+* **Editing**: line numbers, scroll bar, selection (Shift+arrows, mouse drag), word and document movement, auto-indent, tabs, wide characters, undo and redo, and copy, cut and paste through the system clipboard. Saving keeps the file's line endings.
+* **Closing**: the editor sets `canvas.InterceptClose`, so the window's close button, Exit and Ctrl+Q all ask "Save changes?" when there are unsaved changes, and the editor then calls `canvas.Exit()`.
 
 ```powershell
 dotnet run --project samples/AsciiCanvas.Editor -- notes.txt
 ```
 
-Ctrl+S saves (it asks for a name for a new file), Ctrl+Q quits (twice if there are unsaved changes), and F3 shows the performance overlay. The text model (`EditorModel`, `TextBuffer`) knows nothing about the screen, so it is unit tested on its own; `EditorView` draws it and `EditorApp` connects it to the canvas input.
+Shortcuts: Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+Q (Cmd on a Mac), Ctrl+Z / Ctrl+Y, Ctrl+X / C / V, Ctrl+A, and F3 for the performance overlay.
 
-Not done: closing the window with unsaved changes does not ask first (a program cannot intercept that yet), combining characters are separate cursor stops, and there is no search.
+### As a single executable
+
+```powershell
+dotnet publish samples/AsciiCanvas.Editor -c Release -r win-x64
+```
+
+This produces one self-contained file (`AsciiCanvas.Editor.exe`, about 50 MB with the .NET runtime, Avalonia, Skia and the embedded fonts) that runs on a machine without .NET installed. Use `-r osx-arm64` or `-r linux-x64` for the other platforms; only the Windows build has been tried.
+
+### Structure
+
+The text logic (`EditorModel`, `TextBuffer`, `FileBrowserModel`, `TextFile`, `MenuBar`) knows nothing about the screen, so it is unit tested on its own. `EditorView` draws the text, `Tui/` holds the menu loop, dialogs and file dialog, and `EditorApp` connects them to the canvas input.
+
+Not done: combining characters are separate cursor stops, and there is no search.
 
 ## Diagnostics and stress test
 

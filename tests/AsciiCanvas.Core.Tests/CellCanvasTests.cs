@@ -179,6 +179,30 @@ public class CellCanvasTests
         Assert.True(canvas.Input.IsCompleted);
     }
 
+    [Fact]
+    public void Exit_Always_RaisesExitRequested()
+    {
+        using var canvas = new CellCanvas(4, 1);
+        var raised = 0;
+        canvas.ExitRequested += () => raised++;
+
+        canvas.Exit();
+
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public void InterceptClose_ByDefault_IsOffAndCanBeSet()
+    {
+        using var canvas = new CellCanvas(4, 1);
+        var byDefault = canvas.InterceptClose;
+
+        canvas.InterceptClose = true;
+
+        Assert.False(byDefault);
+        Assert.True(canvas.InterceptClose);
+    }
+
     private static string RowText(CellCanvas canvas, int y)
     {
         var sb = new StringBuilder();

@@ -14,6 +14,5 @@ return CanvasApp.Run(
         Sizing = CanvasSizing.FillWithCells,
         FontSize = 16,
         AllowDiagnosticsToggle = true,
-        CloseWindowWhenProgramEnds = true,
     },
     args);

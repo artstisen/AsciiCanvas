@@ -19,10 +19,10 @@ src/
   AsciiCanvas.Avalonia/    CanvasView control, CanvasApp host, input mapping
 samples/
   AsciiCanvas.Demo/        demo app (run with --fill for fixed cell size)
-  AsciiCanvas.Editor/      text editor demo: EditorModel (pure text logic), EditorView, EditorApp
+  AsciiCanvas.Editor/      text editor demo (TUI: menu bar, file browser, dialogs): EditorModel (pure text logic), EditorView, EditorApp, Tui/
 tests/
   AsciiCanvas.Core.Tests/    xUnit v3
-  AsciiCanvas.Editor.Tests/  xUnit v3, the editor's text model
+  AsciiCanvas.Editor.Tests/  xUnit v3: text model, file browser, text file reading, menu geometry
 ```
 
 ## Commands
@@ -70,7 +70,11 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 - **Paste and clipboard**: the host turns Ctrl+V, Cmd+V and Shift+Insert into a `PasteEvent` (`InterceptPasteShortcut`, default on); programs copy through `CellCanvas.Clipboard` (`ICanvasClipboard`), which can throw `ExternalException` when another program holds the clipboard, so callers catch it. `KeyModifiers.Meta` is Command; shortcuts should accept Control or Meta.
 - **`CanvasApp.Run` runs the window on an STA thread on Windows**: the Windows clipboard throws `CoInitialize has not been called` otherwise, and top-level statements cannot carry `[STAThread]`. The `Application` object must be created on that same thread (Avalonia binds its dispatcher to the creating thread), which is why `Run` builds it inside the thread's start function.
 - **The editor sample's model types are public** (`EditorModel`, `TextBuffer`, `TextMeasure`, `TextPosition`) only so `AsciiCanvas.Editor.Tests` can reach them without `InternalsVisibleTo`; the sample is not a library. Editing logic belongs in the model, drawing in `EditorView`, input handling in `EditorApp`.
-- **Known editor limits**: closing the window with unsaved changes does not prompt (programs cannot intercept window close), combining characters are separate cursor stops, no search.
+- **Known editor limits**: combining characters are separate cursor stops, no search.
+- **The editor is a TUI built on the canvas, with no native controls**: `MenuBar` (layout, hit-testing, drawing), `Tui/MenuLoop`, `Tui/MessageDialog` and `Tui/FileDialog` each run their own modal input loop and draw over the editor through `ModalHost.DrawBackground` (the editor drawn without presenting). `EditorApp.ExecuteAsync(EditorCommand)` is the one place where menu entries, shortcuts and close requests end up. Dialogs treat a `CloseRequestedEvent` as "cancel" and re-post it, so the editor's own handler runs. Colors for menus and dialogs are in `Tui/UiStyles`.
+- **Closing**: `canvas.InterceptClose = true` makes the host cancel the window's close and send `CloseRequestedEvent`; the program calls `canvas.Exit()` to really close. The host lets the window close freely once the program has ended, so a finished program can never trap the window.
+- **Single-file publish** of the editor: `dotnet publish samples/AsciiCanvas.Editor -c Release -r win-x64`. The csproj turns on self-contained single-file only when a runtime identifier is given (so builds and tests are unaffected) and deletes the `.pdb`/`.xml` side files after publishing. Do not enable trimming: Avalonia relies on reflection.
+- **Windows PowerShell 5.1 reads UTF-8 files without a BOM as ANSI**: never rewrite source files containing non-ASCII characters (box-drawing, CJK, `█`) with `Get-Content`/`Set-Content` there; use the edit tool.
 
 ## Reference files (read on demand, not loaded at start)
 

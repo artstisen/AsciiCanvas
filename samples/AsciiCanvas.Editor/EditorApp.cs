@@ -1,9 +1,13 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using AsciiCanvas.Editor.Tui;
 
 namespace AsciiCanvas.Editor;
 
-/// <summary>The editor program: reads keys, text, paste and mouse input from the canvas, edits the model and redraws.</summary>
+/// <summary>
+/// The editor program: reads keys, text, paste, mouse and close requests from the canvas, edits the model, and shows menus
+/// and dialogs that are drawn with cells too. Menu entries, shortcuts and a close request all end up in <see cref="ExecuteAsync"/>.
+/// </summary>
 internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? path, string lineEnding)
 {
     private const string Welcome = """
@@ -11,16 +15,20 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         =================================
 
         A small cross-platform text editor drawn on a character-cell canvas.
-        Everything you see is cells: the line numbers, the selection, the scroll bar.
+        Everything you see is cells: the menu, the line numbers, the selection,
+        the scroll bar, and the dialogs for opening and saving files.
 
         What to try:
+            - Click File or Edit in the menu bar, or press F10 or Alt+F / Alt+E.
+            - File > Open shows a file browser. Click a file once to select it,
+              again to open it. Text files only; other files are refused.
             - Type, and use Backspace, Delete, Enter (it keeps the indentation) and Tab.
             - Arrow keys, Home/End, PageUp/PageDown; Ctrl+arrows jump by word.
             - Hold Shift with any of those to select. Drag with the mouse to select.
             - Ctrl+C, Ctrl+X and Ctrl+V (Cmd on a Mac) use the system clipboard.
               Paste something from another program: it arrives as one paste event.
             - Ctrl+Z undoes, Ctrl+Y redoes.
-            - Ctrl+S saves. This text has no file yet, so you are asked for a name.
+            - Closing the window with unsaved changes asks first.
             - F3 shows how fast the canvas draws.
 
         Wide characters take two cells and stay aligned:
@@ -32,40 +40,60 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         """;
 
     private readonly EditorView _view = new();
+    private readonly MenuBar _menuBar = MenuBar.CreateDefault();
     private string? _path = path;
+    private string _lineEnding = lineEnding;
     private string? _message;
     private bool _quit;
-    private bool _quitArmed;
     private bool _dragging;
     private bool _followCaret = true;
 
-    /// <summary>Runs the editor on a canvas until the user quits or the window closes.</summary>
+    /// <summary>Runs the editor on a canvas until the user exits or the window closes.</summary>
     /// <param name="canvas">The canvas to use.</param>
     /// <param name="path">The file to open, or <see langword="null"/> for a new document.</param>
     public static async Task RunAsync(CellCanvas canvas, string? path)
     {
+        // The window must not close before the editor has had the chance to ask about unsaved changes.
+        canvas.InterceptClose = true;
+
         var message = default(string);
         var text = Welcome;
         var lineEnding = Environment.NewLine;
 
         if (path is not null)
         {
-            try
-            {
-                text = File.Exists(path) ? await File.ReadAllTextAsync(path, canvas.Closed) : "";
-                lineEnding = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : text.Contains('\n') ? "\n" : lineEnding;
-                message = File.Exists(path) ? null : "New file";
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            if (!File.Exists(path))
             {
                 text = "";
-                message = $"Could not open {path}: {ex.Message}";
+                message = "New file";
+            }
+            else
+            {
+                var result = await TextFile.ReadAsync(path, canvas.Closed);
+                text = result.Text ?? "";
+                lineEnding = result.LineEnding;
+                message = result.Error;
+                path = result.Succeeded ? path : null;
             }
         }
 
         var app = new EditorApp(canvas, new EditorModel(text), path, lineEnding) { _message = message };
         await app.RunAsync();
+        canvas.Exit();
     }
+
+    private ModalHost Modal => field ??= new ModalHost(canvas, DrawBackground);
+
+    private string DisplayName => _path is null ? "Untitled" : Path.GetFileName(_path);
+
+    private string StartDirectory => _path is null ? Environment.CurrentDirectory : Path.GetDirectoryName(Path.GetFullPath(_path)) ?? Environment.CurrentDirectory;
+
+    private string LineEndingName => _lineEnding switch
+    {
+        "\r\n" => "CRLF",
+        "\r" => "CR",
+        _ => "LF",
+    };
 
     private async Task RunAsync()
     {
@@ -86,23 +114,30 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         }
     }
 
-    private string LineEndingName => lineEnding switch
+    // The editor and its menu bar, without presenting, so a menu or dialog can be drawn on top before the frame is shown.
+    private void DrawBackground()
     {
-        "\r\n" => "CRLF",
-        "\r" => "CR",
-        _ => "LF",
-    };
-
-    private void Redraw(string? prompt = null, string promptInput = "")
-    {
-        var title = (_path is null ? "Untitled" : Path.GetFileName(_path)) + (model.IsModified ? " *" : "");
-        _view.Draw(canvas, model, new EditorChrome(title, _message, LineEndingName, prompt, promptInput), _followCaret);
+        _view.Draw(canvas, model, new EditorChrome(_message, LineEndingName), _followCaret);
+        _menuBar.DrawBar(canvas, DisplayName + (model.IsModified ? " *" : ""));
     }
+
+    private void Redraw()
+    {
+        DrawBackground();
+        canvas.Present();
+    }
+
+    private bool IsEnabled(EditorCommand command) => command switch
+    {
+        EditorCommand.Undo => model.CanUndo,
+        EditorCommand.Redo => model.CanRedo,
+        EditorCommand.Cut or EditorCommand.Copy => model.HasSelection,
+        EditorCommand.Paste => canvas.Clipboard is not null,
+        _ => true,
+    };
 
     private async Task HandleAsync(InputEvent input)
     {
-        var armed = _quitArmed;
-        _quitArmed = false;
         _message = null;
 
         switch (input)
@@ -117,22 +152,41 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
                 _message = $"Pasted {paste.Text.Length} characters";
                 break;
             case KeyEvent key:
-                await HandleKeyAsync(key, armed);
+                await HandleKeyAsync(key);
                 break;
             case MouseEvent mouse:
-                HandleMouse(mouse);
+                await HandleMouseAsync(mouse);
+                break;
+            case CloseRequestedEvent:
+                await ExecuteAsync(EditorCommand.Exit);
                 break;
         }
     }
 
-    private async Task HandleKeyAsync(KeyEvent key, bool quitArmed)
+    private async Task HandleKeyAsync(KeyEvent key)
     {
         var shift = (key.Modifiers & KeyModifiers.Shift) != 0;
         var command = (key.Modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         var alt = (key.Modifiers & KeyModifiers.Alt) != 0;
+
+        if (alt && !command)
+        {
+            switch (key.Key)
+            {
+                case Key.F:
+                    await OpenMenuAsync(0, fromKeyboard: true);
+                    break;
+                case Key.E:
+                    await OpenMenuAsync(1, fromKeyboard: true);
+                    break;
+            }
+
+            return;
+        }
+
         if (alt)
         {
-            // Alt combinations are not used; Ctrl+Alt is how some layouts type AltGr characters, which arrive as text.
+            // Ctrl+Alt is how some layouts type AltGr characters, which arrive as text.
             return;
         }
 
@@ -140,7 +194,7 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
 
         if (command)
         {
-            await HandleCommandAsync(key.Key, shift, quitArmed);
+            await HandleShortcutAsync(key.Key, shift);
             return;
         }
 
@@ -185,38 +239,45 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
             case Key.Escape:
                 model.ClearSelection();
                 break;
+            case Key.F10:
+                await OpenMenuAsync(0, fromKeyboard: true);
+                break;
         }
     }
 
-    private async Task HandleCommandAsync(Key key, bool shift, bool quitArmed)
+    private async Task HandleShortcutAsync(Key key, bool shift)
     {
         switch (key)
         {
+            case Key.N:
+                await ExecuteAsync(EditorCommand.New);
+                break;
+            case Key.O:
+                await ExecuteAsync(EditorCommand.Open);
+                break;
             case Key.S:
-                await SaveAsync();
+                await ExecuteAsync(shift ? EditorCommand.SaveAs : EditorCommand.Save);
                 break;
             case Key.Q:
-                RequestQuit(quitArmed);
-                break;
-            case Key.Z when shift:
-            case Key.Y:
-                _message = model.Redo() ? null : "Nothing to redo";
+                await ExecuteAsync(EditorCommand.Exit);
                 break;
             case Key.Z:
-                _message = model.Undo() ? null : "Nothing to undo";
+                await ExecuteAsync(shift ? EditorCommand.Redo : EditorCommand.Undo);
                 break;
-            case Key.A:
-                model.SelectAll();
-                break;
-            case Key.C:
-                await CopyAsync();
+            case Key.Y:
+                await ExecuteAsync(EditorCommand.Redo);
                 break;
             case Key.X:
-                await CopyAsync();
-                model.DeleteSelection();
+                await ExecuteAsync(EditorCommand.Cut);
+                break;
+            case Key.C:
+                await ExecuteAsync(EditorCommand.Copy);
                 break;
             case Key.V:
-                await PasteAsync();
+                await ExecuteAsync(EditorCommand.Paste);
+                break;
+            case Key.A:
+                await ExecuteAsync(EditorCommand.SelectAll);
                 break;
             case Key.Left:
                 model.MoveWordLeft(shift);
@@ -233,10 +294,18 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         }
     }
 
-    private void HandleMouse(MouseEvent mouse)
+    private async Task HandleMouseAsync(MouseEvent mouse)
     {
         switch (mouse)
         {
+            case { Action: MouseAction.Press, Button: MouseButton.Left, Row: 0 }:
+                var title = _menuBar.TitleAt(mouse.Column, mouse.Row);
+                if (title >= 0)
+                {
+                    await OpenMenuAsync(title, fromKeyboard: false);
+                }
+
+                break;
             case { Action: MouseAction.Press, Button: MouseButton.Left }:
                 _followCaret = true;
                 _dragging = true;
@@ -257,45 +326,208 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         }
     }
 
-    private void RequestQuit(bool quitArmed)
+    private async Task OpenMenuAsync(int index, bool fromKeyboard)
     {
-        if (!model.IsModified || quitArmed)
+        _dragging = false;
+        var chosen = await MenuLoop.RunAsync(Modal, _menuBar, index, fromKeyboard, IsEnabled);
+        if (chosen is { } command)
         {
-            _quit = true;
+            await ExecuteAsync(command);
+        }
+    }
+
+    private async Task ExecuteAsync(EditorCommand command)
+    {
+        _followCaret = true;
+        switch (command)
+        {
+            case EditorCommand.New:
+                await NewAsync();
+                break;
+            case EditorCommand.Open:
+                await OpenAsync();
+                break;
+            case EditorCommand.Save:
+                await SaveAsync();
+                break;
+            case EditorCommand.SaveAs:
+                await SaveAsAsync();
+                break;
+            case EditorCommand.Exit:
+                _quit = await ConfirmLeaveAsync();
+                break;
+            case EditorCommand.Undo:
+                _message = model.Undo() ? null : "Nothing to undo";
+                break;
+            case EditorCommand.Redo:
+                _message = model.Redo() ? null : "Nothing to redo";
+                break;
+            case EditorCommand.Cut:
+                if (await CopyAsync())
+                {
+                    model.DeleteSelection();
+                }
+
+                break;
+            case EditorCommand.Copy:
+                await CopyAsync();
+                break;
+            case EditorCommand.Paste:
+                await PasteAsync();
+                break;
+            case EditorCommand.SelectAll:
+                model.SelectAll();
+                break;
+        }
+    }
+
+    private Task<DialogChoice> AskAsync(string title, string message, params DialogButton[] buttons) =>
+        MessageDialog.ShowAsync(Modal, title, message, buttons);
+
+    // Asks what to do with unsaved changes. True means the document may be replaced or closed.
+    private async Task<bool> ConfirmLeaveAsync()
+    {
+        if (!model.IsModified)
+        {
+            return true;
+        }
+
+        var choice = await AskAsync(
+            "Unsaved changes",
+            $"Save changes to {DisplayName}?",
+            new DialogButton("Save", DialogChoice.Save, 'S'),
+            new DialogButton("Don't save", DialogChoice.DontSave, 'D'),
+            new DialogButton("Cancel", DialogChoice.Cancel, 'C'));
+
+        return choice switch
+        {
+            DialogChoice.Save => await SaveAsync(),
+            DialogChoice.DontSave => true,
+            _ => false,
+        };
+    }
+
+    private async Task NewAsync()
+    {
+        if (!await ConfirmLeaveAsync())
+        {
             return;
         }
 
-        _quitArmed = true;
-        _message = "Unsaved changes. Press Ctrl+Q again to quit without saving, or Ctrl+S to save.";
+        Load("", null, Environment.NewLine);
+        _message = "New document";
     }
 
-    private async Task CopyAsync()
+    private async Task OpenAsync()
+    {
+        if (!await ConfirmLeaveAsync())
+        {
+            return;
+        }
+
+        var chosen = await new FileDialog(Modal, FileDialogMode.Open, StartDirectory, "").RunAsync();
+        if (chosen is null)
+        {
+            return;
+        }
+
+        var result = await TextFile.ReadAsync(chosen, canvas.Closed);
+        if (!result.Succeeded)
+        {
+            await AskAsync("Cannot open file", $"{Path.GetFileName(chosen)}\n{result.Error}", new DialogButton("OK", DialogChoice.Ok, 'O'));
+            return;
+        }
+
+        Load(result.Text!, chosen, result.LineEnding);
+        _message = $"Opened {Path.GetFileName(chosen)}";
+    }
+
+    private void Load(string text, string? newPath, string newLineEnding)
+    {
+        model.Load(text);
+        _path = newPath;
+        _lineEnding = newLineEnding;
+        _view.Reset();
+    }
+
+    private async Task<bool> SaveAsync() => _path is null ? await SaveAsAsync() : await WriteAsync(_path);
+
+    private async Task<bool> SaveAsAsync()
+    {
+        var chosen = await new FileDialog(Modal, FileDialogMode.Save, StartDirectory, _path is null ? "" : Path.GetFileName(_path)).RunAsync();
+        if (chosen is null)
+        {
+            _message = "Save canceled";
+            return false;
+        }
+
+        var sameFile = _path is not null && string.Equals(Path.GetFullPath(_path), chosen, StringComparison.OrdinalIgnoreCase);
+        if (File.Exists(chosen) && !sameFile)
+        {
+            var replace = await AskAsync(
+                "Replace file?",
+                $"{Path.GetFileName(chosen)} already exists. Replace it?",
+                new DialogButton("Replace", DialogChoice.Yes, 'R'),
+                new DialogButton("Cancel", DialogChoice.Cancel, 'C'));
+            if (replace != DialogChoice.Yes)
+            {
+                _message = "Save canceled";
+                return false;
+            }
+        }
+
+        return await WriteAsync(chosen);
+    }
+
+    private async Task<bool> WriteAsync(string target)
+    {
+        try
+        {
+            await File.WriteAllTextAsync(target, model.Text.ReplaceLineEndings(_lineEnding), new UTF8Encoding(false), canvas.Closed);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            await AskAsync("Cannot save file", $"{Path.GetFileName(target)}\n{ex.Message}", new DialogButton("OK", DialogChoice.Ok, 'O'));
+            return false;
+        }
+
+        _path = target;
+        model.MarkSaved();
+        _message = $"Saved {model.Buffer.LineCount} lines to {Path.GetFileName(target)}";
+        return true;
+    }
+
+    private async Task<bool> CopyAsync()
     {
         var text = model.SelectedText;
         if (text.Length == 0)
         {
             _message = "Nothing selected";
+            return false;
         }
-        else if (canvas.Clipboard is null)
+
+        if (canvas.Clipboard is null)
         {
             _message = "No clipboard available";
+            return false;
         }
-        else
+
+        try
         {
-            try
-            {
-                await canvas.Clipboard.SetTextAsync(text, canvas.Closed);
-                _message = $"Copied {text.Length} characters";
-            }
-            catch (ExternalException)
-            {
-                // Another program can hold the clipboard for a moment; the editor should carry on.
-                _message = "Could not use the clipboard; try again";
-            }
+            await canvas.Clipboard.SetTextAsync(text, canvas.Closed);
         }
+        catch (ExternalException)
+        {
+            // Another program can hold the clipboard for a moment; the editor should carry on.
+            _message = "Could not use the clipboard; try again";
+            return false;
+        }
+
+        _message = $"Copied {text.Length} characters";
+        return true;
     }
 
-    // Reached only when the host does not turn the paste shortcut into a paste event itself.
+    // Reached from the menu, or when the host does not turn the paste shortcut into a paste event itself.
     private async Task PasteAsync()
     {
         string? text;
@@ -313,53 +545,6 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
         {
             model.InsertText(text);
             _message = $"Pasted {text.Length} characters";
-        }
-    }
-
-    private async Task SaveAsync()
-    {
-        var target = _path ?? await PromptAsync("Save as: ");
-        if (string.IsNullOrWhiteSpace(target))
-        {
-            _message = "Save canceled";
-            return;
-        }
-
-        try
-        {
-            await File.WriteAllTextAsync(target, model.Text.ReplaceLineEndings(lineEnding), new UTF8Encoding(false), canvas.Closed);
-            _path = target;
-            model.MarkSaved();
-            _message = $"Saved {model.Buffer.LineCount} lines to {Path.GetFileName(target)}";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _message = $"Could not save: {ex.Message}";
-        }
-    }
-
-    private async Task<string?> PromptAsync(string prompt)
-    {
-        var answer = new StringBuilder();
-        while (true)
-        {
-            Redraw(prompt, answer.ToString());
-            switch (await canvas.Input.ReadAsync(canvas.Closed))
-            {
-                case TextEvent text:
-                    answer.Append(text.Text);
-                    break;
-                case PasteEvent paste:
-                    answer.Append(paste.Text.ReplaceLineEndings(" "));
-                    break;
-                case KeyEvent { Key: Key.Back } when answer.Length > 0:
-                    answer.Length--;
-                    break;
-                case KeyEvent { Key: Key.Enter }:
-                    return answer.ToString();
-                case KeyEvent { Key: Key.Escape }:
-                    return null;
-            }
         }
     }
 }

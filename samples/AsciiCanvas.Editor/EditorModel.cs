@@ -44,6 +44,12 @@ public sealed class EditorModel
     /// <summary>True if the text changed since it was loaded or last marked as saved.</summary>
     public bool IsModified => _version != _savedVersion;
 
+    /// <summary>True if there is a change to undo.</summary>
+    public bool CanUndo => _history.CanUndo;
+
+    /// <summary>True if there is an undone change to redo.</summary>
+    public bool CanRedo => _history.CanRedo;
+
     /// <summary>The grid column the caret keeps when moving up and down over lines of different length.</summary>
     public int PreferredColumn { get; private set; }
 

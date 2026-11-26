@@ -5,8 +5,29 @@
     <RootNamespace>AsciiCanvas.Editor</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    A single self-contained executable: dotnet publish samples/AsciiCanvas.Editor -c Release -r win-x64
+    (or osx-arm64, linux-x64). These only apply when a runtime is given, so normal builds and the tests are unaffected.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\AsciiCanvas.Avalonia\AsciiCanvas.Avalonia.csproj" />
   </ItemGroup>
+
+  <!-- Symbol and documentation files of the referenced projects and packages are copied next to the executable; a single-file publish should leave only the executable. -->
+  <Target Name="RemoveSidecarFiles" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <SidecarFile Include="$(PublishDir)*.pdb;$(PublishDir)*.xml" />
+    </ItemGroup>
+    <Delete Files="@(SidecarFile)" />
+  </Target>
 
 </Project>

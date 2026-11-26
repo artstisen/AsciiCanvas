@@ -28,8 +28,35 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// <summary>Raised on the drawing thread after a <see cref="Present"/> that published new content. Hosts should marshal to their UI thread.</summary>
     public event Action? Presented;
 
+    /// <summary>Raised when the program calls <see cref="Exit"/>. Hosts subscribe to close their window.</summary>
+    public event Action? ExitRequested;
+
     /// <summary>Input from the user. Hosts post to it; programs read from it.</summary>
     public CanvasInput Input { get; } = new();
+
+    /// <summary>
+    /// When true, the user's attempt to close the window does not close it. The host sends a <see cref="CloseRequestedEvent"/>
+    /// instead, and the program decides, for example by asking about unsaved changes, and calls <see cref="Exit"/> to close.
+    /// Off by default. A program that sets it must keep reading <see cref="Input"/>, or the window cannot be closed.
+    /// </summary>
+    public bool InterceptClose
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                field = value;
+            }
+        }
+    }
 
     /// <summary>The system clipboard, if the host provides one. <see langword="null"/> otherwise (for example in tests).</summary>
     public ICanvasClipboard? Clipboard { get; set; }
@@ -171,6 +198,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             _changed = true;
         }
     }
+
+    /// <summary>Asks the host to close the window now, without a <see cref="CloseRequestedEvent"/> round trip. Call it when the program is done or the user confirmed leaving.</summary>
+    public void Exit() => ExitRequested?.Invoke();
 
     /// <summary>Called by hosts when the canvas is going away. Completes <see cref="Input"/> and cancels <see cref="Closed"/>.</summary>
     public void Close()
