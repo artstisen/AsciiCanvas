@@ -23,7 +23,7 @@ public sealed class CanvasAppOptions
     /// <summary>The font size of the cells (the natural size, used for the initial window size).</summary>
     public double FontSize { get; init; } = 18;
 
-    /// <summary>The cell font, which must be monospaced. Defaults to the embedded <see cref="CanvasView.DefaultFontFamily"/>.</summary>
+    /// <summary>The cell font, which must be monospaced. Defaults to <see cref="CanvasFonts.Default"/>; <see cref="CanvasFonts"/> lists the embedded fonts.</summary>
     public FontFamily? FontFamily { get; init; }
 
     /// <summary>Maps the cell colors to RGB.</summary>

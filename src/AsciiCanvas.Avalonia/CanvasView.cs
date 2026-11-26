@@ -9,9 +9,6 @@ namespace AsciiCanvas.Avalonia;
 /// <summary>Avalonia control that displays a <see cref="CellCanvas"/> and feeds keyboard, text and mouse input back to it.</summary>
 public sealed class CanvasView : Control
 {
-    // Declared first: the styled properties below use it, and static initializers run in textual order.
-    private static readonly FontFamily _embeddedFontFamily = new("avares://AsciiCanvas.Avalonia/Assets/Fonts#Cascadia Mono");
-
     /// <summary>Identifies <see cref="Canvas"/>.</summary>
     public static readonly StyledProperty<CellCanvas> CanvasProperty =
         AvaloniaProperty.Register<CanvasView, CellCanvas>(nameof(Canvas));
@@ -26,7 +23,7 @@ public sealed class CanvasView : Control
 
     /// <summary>Identifies <see cref="FontFamily"/>.</summary>
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
-        AvaloniaProperty.Register<CanvasView, FontFamily>(nameof(FontFamily), _embeddedFontFamily);
+        AvaloniaProperty.Register<CanvasView, FontFamily>(nameof(FontFamily), CanvasFonts.Default);
 
     /// <summary>Identifies <see cref="FontSize"/>.</summary>
     public static readonly StyledProperty<double> FontSizeProperty =
@@ -68,9 +65,6 @@ public sealed class CanvasView : Control
         };
     }
 
-    /// <summary>The font used unless <see cref="FontFamily"/> is set: Cascadia Mono, embedded in this library so it looks the same on every platform.</summary>
-    public static FontFamily DefaultFontFamily => _embeddedFontFamily;
-
     /// <summary>The canvas shown by this control. Defaults to a new 80 x 25 canvas.</summary>
     public CellCanvas Canvas
     {
@@ -92,7 +86,7 @@ public sealed class CanvasView : Control
         set => SetValue(PreserveAspectRatioProperty, value);
     }
 
-    /// <summary>The font of the cells. Must be monospaced. Defaults to <see cref="DefaultFontFamily"/>.</summary>
+    /// <summary>The font of the cells. Must be monospaced. Defaults to <see cref="CanvasFonts.Default"/>; <see cref="CanvasFonts"/> lists the embedded fonts.</summary>
     public FontFamily FontFamily
     {
         get => GetValue(FontFamilyProperty);
