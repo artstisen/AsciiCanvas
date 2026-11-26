@@ -57,6 +57,20 @@ dotnet publish samples/AsciiCanvas.Editor -c Release -r win-x64
 
 This produces one self-contained file (`AsciiCanvas.Editor.exe`, about 50 MB with the .NET runtime, Avalonia, Skia and the embedded fonts) that runs on a machine without .NET installed. Use `-r osx-arm64` or `-r linux-x64` for the other platforms; only the Windows build has been tried.
 
+The native graphics libraries (Skia, HarfBuzz, ANGLE) cannot be loaded from inside the file, so on first start they are unpacked to a cache folder (`%TEMP%\.net\AsciiCanvas.Editor\…` on Windows) and reused after that. To keep them next to the executable instead, so nothing is written outside the program's folder:
+
+```powershell
+dotnet publish samples/AsciiCanvas.Editor -c Release -r win-x64 -p:IncludeNativeLibrariesForSelfExtract=false
+```
+
+| | Single file (default) | Native libraries beside the exe |
+|---|---|---|
+| Files | `AsciiCanvas.Editor.exe` (50 MB) | `AsciiCanvas.Editor.exe` (42 MB) + `libSkiaSharp.dll`, `libHarfBuzzSharp.dll`, `av_libglesv2.dll` (19 MB) |
+| Writes to temp | Yes, once (19 MB) | No |
+| First start (measured) | 1.6 s | 1.1 s |
+
+With the second form the DLLs must stay in the same folder as the executable (on macOS and Linux they are `.dylib` and `.so` files).
+
 ### Structure
 
 The text logic (`EditorModel`, `TextBuffer`, `FileBrowserModel`, `TextFile`, `MenuBar`) knows nothing about the screen, so it is unit tested on its own. `EditorView` draws the text, `Tui/` holds the menu loop, dialogs and file dialog, and `EditorApp` connects them to the canvas input.
