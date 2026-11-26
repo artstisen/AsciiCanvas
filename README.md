@@ -23,7 +23,11 @@ CanvasApp.Run(async canvas =>
 });
 ```
 
+**Building a program on AsciiCanvas? Start with the [usage guide](docs/USAGE.md):** the drawing methods, input events, closing,
+sizing, console-style programs, hosting `CanvasView` in your own Avalonia app, and testing without a window.
+
 * **Drawing** goes to a back buffer; `Present()` publishes it, so partial frames are never shown. All members are thread-safe.
+* **Window title**: `CanvasAppOptions.Title` sets the initial title, and `canvas.Title = "..."` changes it at any time.
 * **Input** arrives as `KeyEvent`, `TextEvent` (layout-translated text), `PasteEvent`, `MouseEvent` (cell coordinates), `ResizeEvent` and `CloseRequestedEvent`.
 * **Resize and close events**: `ResizeEvent` is sent whenever the grid changes size, which with `CanvasSizing.FillWithCells` happens whenever the window is resized (with `ScaleToFit` the grid keeps its size, so there is nothing to report). `CloseRequestedEvent` is sent when the user tries to close the window, but only if the program has set `canvas.InterceptClose = true`; the window then stays open until the program calls `canvas.Exit()`, so it can ask about unsaved changes first. A program that sets `InterceptClose` must keep reading input.
 * **Paste and clipboard**: Ctrl+V, Cmd+V and Shift+Insert make the host read the clipboard and send the text as one `PasteEvent` (multi-line text included, line breaks as `\n`); set `CanvasView.InterceptPasteShortcut` / `CanvasAppOptions.InterceptPasteShortcut` to false to get the raw key press instead. Programs copy and cut through `canvas.Clipboard` (`ICanvasClipboard`: `GetTextAsync`, `SetTextAsync`), which does not depend on the UI framework. `KeyModifiers.Meta` is the Command key, so a Mac program can accept `Control` or `Meta` for its shortcuts. `TextTerminal.ReadLineAsync` accepts pasted text.
@@ -108,4 +112,5 @@ The coding rules come from the [CSharp Coding Kit](https://github.com/artstisen/
 dotnet build
 dotnet test
 dotnet format --verify-no-changes
+dotnet pack -c Release -o artifacts   # AsciiCanvas.Core and AsciiCanvas.Avalonia packages (artifacts/ is not committed)
 ```

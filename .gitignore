@@ -9,3 +9,4 @@ desktop.ini
 
 # Claude Code local (per-user) settings
 .claude/settings.local.json
+artifacts/

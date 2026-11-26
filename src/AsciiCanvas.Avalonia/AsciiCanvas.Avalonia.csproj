@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Avalonia control and window host that display an AsciiCanvas cell grid.</Description>
+    <Description>Avalonia control and window host that display an AsciiCanvas cell grid, with two embedded monospaced fonts (Cascadia Mono and JetBrains Mono).</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AsciiCanvas.Core\AsciiCanvas.Core.csproj" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>
