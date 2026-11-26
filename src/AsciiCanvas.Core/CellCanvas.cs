@@ -20,6 +20,7 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     private readonly CancellationTokenSource _closed = new();
 
     private bool _changed;
+    private string _title = string.Empty;
     private long _version;
     private int _cursorColumn;
     private int _cursorRow;
@@ -31,8 +32,43 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// <summary>Raised when the program calls <see cref="Exit"/>. Hosts subscribe to close their window.</summary>
     public event Action? ExitRequested;
 
+    /// <summary>Raised on the calling thread after <see cref="Title"/> changed, with the new title. Hosts should marshal to their UI thread.</summary>
+    public event Action<string>? TitleChanged;
+
     /// <summary>Input from the user. Hosts post to it; programs read from it.</summary>
     public CanvasInput Input { get; } = new();
+
+    /// <summary>
+    /// The title of the window that shows the canvas. Set it at any time, for example to show a file name; the host updates its
+    /// window. Starts with the title from the host's options, and is empty for a canvas without a host.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">The value is <see langword="null"/>.</exception>
+    public string Title
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _title;
+            }
+        }
+
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            bool changed;
+            lock (_gate)
+            {
+                changed = _title != value;
+                _title = value;
+            }
+
+            if (changed)
+            {
+                TitleChanged?.Invoke(value);
+            }
+        }
+    }
 
     /// <summary>
     /// When true, the user's attempt to close the window does not close it. The host sends a <see cref="CloseRequestedEvent"/>

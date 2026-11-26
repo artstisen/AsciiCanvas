@@ -59,6 +59,8 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 }
             };
             window.Closed += (_, _) => canvas.Close();
+            canvas.Title = options.Title;
+            canvas.TitleChanged += title => Dispatcher.UIThread.Post(() => window.Title = title);
             canvas.ExitRequested += () => Dispatcher.UIThread.Post(() => CloseWindow(window));
             desktop.MainWindow = window;
 

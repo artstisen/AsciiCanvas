@@ -203,6 +203,29 @@ public class CellCanvasTests
         Assert.True(canvas.InterceptClose);
     }
 
+    [Fact]
+    public void Title_WhenChanged_RaisesTitleChangedOnlyForNewValues()
+    {
+        using var canvas = new CellCanvas(4, 1);
+        var titles = new List<string>();
+        canvas.TitleChanged += titles.Add;
+
+        canvas.Title = "notes.txt";
+        canvas.Title = "notes.txt";
+        canvas.Title = "notes.txt *";
+
+        Assert.Equal(["notes.txt", "notes.txt *"], titles);
+        Assert.Equal("notes.txt *", canvas.Title);
+    }
+
+    [Fact]
+    public void Title_SetToNull_Throws()
+    {
+        using var canvas = new CellCanvas(4, 1);
+
+        Assert.Throws<ArgumentNullException>(() => canvas.Title = null!);
+    }
+
     private static string RowText(CellCanvas canvas, int y)
     {
         var sb = new StringBuilder();

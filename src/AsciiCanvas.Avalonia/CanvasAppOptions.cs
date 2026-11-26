@@ -5,7 +5,7 @@ namespace AsciiCanvas.Avalonia;
 /// <summary>Settings for the window opened by <see cref="CanvasApp"/>.</summary>
 public sealed class CanvasAppOptions
 {
-    /// <summary>The window title.</summary>
+    /// <summary>The initial window title. The program can change it later with <see cref="CellCanvas.Title"/>.</summary>
     public string Title { get; init; } = "AsciiCanvas";
 
     /// <summary>The initial number of columns.</summary>

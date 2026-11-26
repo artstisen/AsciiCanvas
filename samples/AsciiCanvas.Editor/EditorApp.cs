@@ -117,8 +117,10 @@ internal sealed class EditorApp(CellCanvas canvas, EditorModel model, string? pa
     // The editor and its menu bar, without presenting, so a menu or dialog can be drawn on top before the frame is shown.
     private void DrawBackground()
     {
+        var name = DisplayName + (model.IsModified ? " *" : string.Empty);
+        canvas.Title = $"{name} - AsciiCanvas Editor";
         _view.Draw(canvas, model, new EditorChrome(_message, LineEndingName), _followCaret);
-        _menuBar.DrawBar(canvas, DisplayName + (model.IsModified ? " *" : ""));
+        _menuBar.DrawBar(canvas, name);
     }
 
     private void Redraw()
