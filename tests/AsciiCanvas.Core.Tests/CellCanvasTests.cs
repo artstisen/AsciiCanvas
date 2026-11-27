@@ -338,4 +338,20 @@ public class CellCanvasTests
         Assert.Equal(CellColor.BrightBlue, canvas.CopyFrame(frame).CursorColor);
         Assert.Equal(CellColor.BrightBlue, canvas.CursorColor);
     }
+
+    [Fact]
+    public void WindowState_FullScreen_IsRequested_AndKeptWhenReported()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        List<CanvasWindowState> requests = [];
+        canvas.WindowStateRequested += requests.Add;
+
+        canvas.WindowState = CanvasWindowState.FullScreen;
+        canvas.ReportWindowState(CanvasWindowState.FullScreen);
+
+        Assert.Equal([CanvasWindowState.FullScreen], requests);
+        Assert.Equal(CanvasWindowState.FullScreen, canvas.WindowState);
+        Assert.True(canvas.Input.TryRead(out var posted));
+        Assert.Equal(new WindowStateEvent(CanvasWindowState.FullScreen), posted);
+    }
 }

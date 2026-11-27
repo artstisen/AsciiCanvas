@@ -55,6 +55,10 @@ public sealed class CanvasView : Control
     public static readonly StyledProperty<bool> AllowDiagnosticsToggleProperty =
         AvaloniaProperty.Register<CanvasView, bool>(nameof(AllowDiagnosticsToggle));
 
+    /// <summary>Identifies <see cref="AllowFullScreenToggle"/>.</summary>
+    public static readonly StyledProperty<bool> AllowFullScreenToggleProperty =
+        AvaloniaProperty.Register<CanvasView, bool>(nameof(AllowFullScreenToggle));
+
     /// <summary>Identifies <see cref="InterceptPasteShortcut"/>.</summary>
     public static readonly StyledProperty<bool> InterceptPasteShortcutProperty =
         AvaloniaProperty.Register<CanvasView, bool>(nameof(InterceptPasteShortcut), true);
@@ -65,6 +69,7 @@ public sealed class CanvasView : Control
     private readonly DispatcherTimer _blinkTimer = new() { Interval = TimeSpan.FromMilliseconds(530) };
 
     private (double Advance, double Height)? _fontMetrics;
+    private WindowState _beforeFullScreen = WindowState.Normal; // The state Alt+Enter or F11 goes back to from full screen
 
     // The colors of the texture, one per cell, kept until the texture, the grid, the pinned rows or the background change:
     // the pattern costs a few sines per cell, and most renders only follow typing.
@@ -170,6 +175,17 @@ public sealed class CanvasView : Control
     {
         get => GetValue(AllowDiagnosticsToggleProperty);
         set => SetValue(AllowDiagnosticsToggleProperty, value);
+    }
+
+    /// <summary>
+    /// When true, Alt+Enter (the key of Windows terminals) and F11 (that of most Linux programs) switch the window that holds
+    /// the control to full screen and back to the state it had before, and the keys are not passed on to the program. Off by
+    /// default, so the program receives every key. On macOS the system's own Ctrl+Cmd+F works as for any window.
+    /// </summary>
+    public bool AllowFullScreenToggle
+    {
+        get => GetValue(AllowFullScreenToggleProperty);
+        set => SetValue(AllowFullScreenToggleProperty, value);
     }
 
     /// <summary>
@@ -301,6 +317,24 @@ public sealed class CanvasView : Control
         if (AllowDiagnosticsToggle && key == Key.F3 && modifiers == KeyModifiers.None)
         {
             ShowDiagnostics = !ShowDiagnostics;
+            e.Handled = true;
+            return;
+        }
+
+        if (AllowFullScreenToggle && ((key == Key.Enter && modifiers == KeyModifiers.Alt) || (key == Key.F11 && modifiers == KeyModifiers.None)) &&
+            TopLevel.GetTopLevel(this) is Window window)
+        {
+            // (back to the state before it: a window maximized before stays maximized)
+            if (window.WindowState == WindowState.FullScreen)
+            {
+                window.WindowState = _beforeFullScreen;
+            }
+            else
+            {
+                _beforeFullScreen = window.WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                window.WindowState = WindowState.FullScreen;
+            }
+
             e.Handled = true;
             return;
         }
@@ -460,7 +494,8 @@ public sealed class CanvasView : Control
             return true;
         }
 
-        if (!IsOverDragRegion(position))
+        // (a window in full screen is not moved, nor maximized by a double-click: Alt+Enter or F11 brings it back)
+        if (!IsOverDragRegion(position) || window.WindowState == WindowState.FullScreen)
         {
             return false;
         }

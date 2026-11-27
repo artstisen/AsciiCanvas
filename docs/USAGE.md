@@ -232,6 +232,7 @@ new CanvasAppOptions
     CloseWindowWhenProgramEnds = false,
     ShowDiagnostics = false,
     AllowDiagnosticsToggle = true,           // F3 shows frame times
+    AllowFullScreenToggle = true,            // Alt+Enter and F11 switch to full screen and back
     ScrollbackLines = 1000,                  // rows kept for scrolling back; RunTerminal's default, 0 turns it off
 }
 ```
@@ -254,6 +255,10 @@ new CanvasAppOptions
 - **Fonts**: Cascadia Mono (default) and JetBrains Mono are embedded, so every platform looks the same. Any other
   monospaced `FontFamily` works.
 - **Diagnostics**: `ShowDiagnostics` draws the frame rate, render times and the grid size over the canvas, for testing.
+- **Full screen**: `AllowFullScreenToggle` lets Alt+Enter (as in Windows terminals) and F11 (as in most Linux programs) switch the
+  window to full screen and back to the state it had; the keys then do not reach the program. Off by default. A program can also set
+  `canvas.WindowState = CanvasWindowState.FullScreen`, and reads the state the window reports. On macOS the system's Ctrl+Cmd+F
+  works as for any window. With `FillWithCells` the grid gets more columns and rows, as for a window made larger.
 - **Scrollback**: see "Scrollback" below. `ScrollbackLines` sets `canvas.ScrollbackLimit` at start-up. Unset, `RunTerminal` keeps
   `CanvasApp.DefaultTerminalScrollbackLines` (1000) rows and `Run` keeps none.
 

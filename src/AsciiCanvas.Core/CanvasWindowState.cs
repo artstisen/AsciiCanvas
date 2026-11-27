@@ -11,4 +11,7 @@ public enum CanvasWindowState
 
     /// <summary>The window fills the screen (or its work area).</summary>
     Maximized,
+
+    /// <summary>The window covers the whole screen, without its frame or the taskbar.</summary>
+    FullScreen,
 }

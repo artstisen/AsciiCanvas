@@ -39,6 +39,7 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 Palette = options.Palette,
                 ShowDiagnostics = options.ShowDiagnostics,
                 AllowDiagnosticsToggle = options.AllowDiagnosticsToggle,
+                AllowFullScreenToggle = options.AllowFullScreenToggle,
                 InterceptPasteShortcut = options.InterceptPasteShortcut,
             };
 
@@ -137,13 +138,15 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
     {
         CanvasWindowState.Minimized => WindowState.Minimized,
         CanvasWindowState.Maximized => WindowState.Maximized,
+        CanvasWindowState.FullScreen => WindowState.FullScreen,
         _ => WindowState.Normal,
     };
 
     private static CanvasWindowState FromWindowState(WindowState state) => state switch
     {
         WindowState.Minimized => CanvasWindowState.Minimized,
-        WindowState.Maximized or WindowState.FullScreen => CanvasWindowState.Maximized,
+        WindowState.Maximized => CanvasWindowState.Maximized,
+        WindowState.FullScreen => CanvasWindowState.FullScreen,
         _ => CanvasWindowState.Normal,
     };
 
