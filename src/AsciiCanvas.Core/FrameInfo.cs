@@ -6,9 +6,11 @@ namespace AsciiCanvas;
 /// <param name="CursorRow">The row of the cursor.</param>
 /// <param name="CursorVisible">True if the cursor should be shown.</param>
 /// <param name="CursorShape">The shape of the cursor.</param>
+/// <param name="CursorColor">The color of the cursor; <see cref="CellColor.Default"/> for the colors of the cell under it.</param>
 public readonly record struct FrameInfo(
     long Version,
     int CursorColumn,
     int CursorRow,
     bool CursorVisible,
-    CursorShape CursorShape);
+    CursorShape CursorShape,
+    CellColor CursorColor = default);

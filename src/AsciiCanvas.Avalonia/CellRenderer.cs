@@ -24,13 +24,16 @@ internal sealed class CellRenderer(
     public void FillCells(uint rgb, int column, int row, int span) =>
         context.FillRectangle(resources.BrushFor(rgb), CellBounds(column, row, span));
 
-    /// <summary>Draws glyph and decorations of one cell. With <paramref name="invert"/> the cell is also painted in swapped colors (for the cursor).</summary>
-    public void DrawForeground(Cell cell, int column, int row, bool invert)
+    /// <summary>
+    /// Draws glyph and decorations of one cell. With <paramref name="invert"/> the cell is also painted in swapped colors (for the
+    /// cursor), or with <paramref name="cursorColor"/> as its background and the default background as its foreground.
+    /// </summary>
+    public void DrawForeground(Cell cell, int column, int row, bool invert, uint? cursorColor = null)
     {
         RenderResources.ResolveColors(palette, cell.Style, out var foreground, out var background);
         if (invert)
         {
-            (foreground, background) = (background, foreground);
+            (foreground, background) = cursorColor is { } color ? (palette.DefaultBackground, color) : (background, foreground);
             if (cell.Width is CellWidth.Narrow or CellWidth.WideLead)
             {
                 FillCells(background, column, row, cell.Width == CellWidth.WideLead ? 2 : 1);
@@ -190,14 +193,14 @@ internal sealed class CellRenderer(
         }
     }
 
-    public void DrawCursor(Cell cell, int column, int row, CursorShape shape, bool focused)
+    public void DrawCursor(Cell cell, int column, int row, CursorShape shape, bool focused, uint? color = null)
     {
         var rect = CellBounds(column, row);
         if (!focused)
         {
             RenderResources.ResolveColors(palette, cell.Style, out var fg, out _);
             var edge = Math.Max(1 / scale, Math.Round(rect.Height / 14 * scale) / scale);
-            var pen = new Pen(resources.BrushFor(fg), edge);
+            var pen = new Pen(resources.BrushFor(color ?? fg), edge);
             context.DrawRectangle(null, pen, rect.Deflate(edge / 2));
             return;
         }
@@ -205,7 +208,7 @@ internal sealed class CellRenderer(
         switch (shape)
         {
             case CursorShape.Block:
-                DrawForeground(cell, column, row, invert: true);
+                DrawForeground(cell, column, row, invert: true, color);
                 break;
             case CursorShape.Underline:
             case CursorShape.Bar:
@@ -213,7 +216,7 @@ internal sealed class CellRenderer(
                 var bar = shape == CursorShape.Underline
                     ? new Rect(rect.X, rect.Bottom - size, rect.Width, size)
                     : new Rect(rect.X, rect.Y, Math.Min(size, rect.Width), rect.Height);
-                context.FillRectangle(resources.BrushFor(palette.DefaultForeground), bar);
+                context.FillRectangle(resources.BrushFor(color ?? palette.DefaultForeground), bar);
                 break;
         }
     }

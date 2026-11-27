@@ -568,7 +568,8 @@ public sealed class CanvasView : Control
             {
                 var cursorX = Math.Clamp(info.CursorColumn, 0, columns - 1);
                 var cursorY = Math.Clamp(info.CursorRow, 0, rows - 1);
-                renderer.DrawCursor(_frame[cursorX, cursorY], cursorX, cursorY, info.CursorShape, IsFocused);
+                uint? cursorColor = info.CursorColor.IsDefault ? null : palette.Resolve(info.CursorColor, true);
+                renderer.DrawCursor(_frame[cursorX, cursorY], cursorX, cursorY, info.CursorShape, IsFocused, cursorColor);
             }
         }
     }

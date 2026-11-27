@@ -97,7 +97,7 @@ current clip is ignored silently. Every method takes an optional `CellStyle`; wi
 | `Scroll(region, dx, dy, style?)` | Moves a region's content |
 | `Capture(rect)` / `Blit(grid, x, y, ...)` | Copy a region out as a `CellGrid`, and draw a grid back (`skipBlanks` makes it a transparent sprite) |
 | `Resize(columns, rows)` | Changes the grid size from the program (posts a `ResizeEvent`) |
-| `SetCursor(x, y)`, `CursorVisible`, `CursorShape` | The text cursor, shown by the host |
+| `SetCursor(x, y)`, `CursorVisible`, `CursorShape`, `CursorColor` | The text cursor, shown by the host (`CursorColor`: `Default` swaps the colors of the cell under a block; another color fills the block, or paints the bar, in that color) |
 | `Present()` | Publishes everything drawn since the last call. Does nothing if nothing changed |
 
 `CellRect` is `(X, Y, Width, Height)` with `Right`, `Bottom`, `Contains`, `Intersect`, `Offset` and `Inflate`. `canvas.Bounds` is

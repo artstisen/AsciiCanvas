@@ -577,6 +577,32 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
         }
     }
 
+    /// <summary>
+    /// The color of the text cursor. <see cref="CellColor.Default"/> (the default) draws a block cursor in the swapped colors
+    /// of the cell under it and a bar or underline in the default foreground. Another color fills the block with it, with the
+    /// character under it in the default background, and paints the bar or underline in it. Shown with the next
+    /// <see cref="Present"/>, as <see cref="CursorShape"/> is, so a shape and a color changed together show together.
+    /// </summary>
+    public CellColor CursorColor
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                field = value;
+                _changed = true;
+            }
+        }
+    }
+
     /// <summary>Moves the text cursor, clamped to the canvas.</summary>
     /// <param name="column">The column.</param>
     /// <param name="row">The row.</param>
@@ -658,7 +684,7 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             _front.CopyFrom(_back);
             _changed = false;
             _version++;
-            _frameInfo = new FrameInfo(_version, _cursorColumn, _cursorRow, CursorVisible, CursorShape);
+            _frameInfo = new FrameInfo(_version, _cursorColumn, _cursorRow, CursorVisible, CursorShape, CursorColor);
             PublishScrollback();
         }
 

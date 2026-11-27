@@ -323,4 +323,19 @@ public class CellCanvasTests
         Assert.Throws<ArgumentOutOfRangeException>(() => canvas.FontSize = size);
         Assert.Equal(16, canvas.FontSize);
     }
+
+    [Fact]
+    public void CursorColor_IsPublishedWithTheFrame_AtPresent()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        var frame = new CellGrid(1, 1);
+        Assert.True(canvas.CopyFrame(frame).CursorColor.IsDefault);
+
+        canvas.CursorColor = CellColor.BrightBlue;
+        Assert.True(canvas.CopyFrame(frame).CursorColor.IsDefault);
+        canvas.Present();
+
+        Assert.Equal(CellColor.BrightBlue, canvas.CopyFrame(frame).CursorColor);
+        Assert.Equal(CellColor.BrightBlue, canvas.CursorColor);
+    }
 }
