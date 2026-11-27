@@ -163,6 +163,23 @@ public sealed class TerminalConsoleTests : IDisposable
         Assert.False(TerminalConsole.KeyAvailable);
     }
 
+    [Fact]
+    public void LastKeyPasted_TellsAPastedKeyFromATypedOne()
+    {
+        _canvas.Input.Post(new PasteEvent("a\nb"));
+        _canvas.Input.Post(new TextEvent("c"));
+
+        List<bool> pasted = [];
+        for (var i = 0; i < 4; i++)
+        {
+            TerminalConsole.ReadKey(true);
+            pasted.Add(TerminalConsole.LastKeyPasted);
+        }
+
+        // (a, Enter and b of the paste, then c typed)
+        Assert.Equal([true, true, true, false], pasted);
+    }
+
     [Theory]
     [InlineData(Key.Up, ConsoleKey.UpArrow, '\0')]
     [InlineData(Key.Enter, ConsoleKey.Enter, '\r')]

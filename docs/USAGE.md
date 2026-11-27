@@ -190,6 +190,9 @@ Redraw();
 
   `ConsoleKeyMap.FromKeyPress(press)` and `ConsoleKeyMap.FromChar(c)` do the same for one `KeyPress` (from
   `TextTerminal.ReadKeyAsync`) or one typed character.
+- A key from a paste can be told from a typed one: the `KeyPress` of a paste has `Pasted` set, and
+  `TerminalConsole.LastKeyPasted` tells whether the last key `ReadKey` returned came from one (not a member of `System.Console`,
+  which cannot tell). A program with keys of its own, as the normal mode of an editor, can then put pasted text in as text.
 
 ### Closing
 

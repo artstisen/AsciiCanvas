@@ -28,6 +28,7 @@ public static class TerminalConsole
     private static TextTerminal? _terminal;
     private static string _typed = "";
     private static int _typedIndex;
+    private static bool _typedPasted; // The text being handed out key by key came from a paste
 
     /// <summary>The terminal that the members of this class use.</summary>
     /// <exception cref="InvalidOperationException">No terminal is attached.</exception>
@@ -225,6 +226,13 @@ public static class TerminalConsole
     public static int Read() => Terminal.In.Read();
 
     /// <summary>
+    /// True when the last key <see cref="ReadKey(bool)"/> returned came from a paste (Ctrl+V, Cmd+V, Shift+Insert), not from
+    /// typing: a program with keys of its own (an editor's normal mode) can put pasted text in as text. Not part of
+    /// <see cref="System.Console"/>, which cannot tell them apart.
+    /// </summary>
+    public static bool LastKeyPasted { get; private set; }
+
+    /// <summary>
     /// Waits for a key. Typed text comes one character at a time, as it does from the console. Without <paramref name="intercept"/>
     /// the typed character is shown.
     /// </summary>
@@ -238,12 +246,16 @@ public static class TerminalConsole
             var press = terminal.ReadKeyAsync(terminal.Canvas.Closed).AsTask().GetAwaiter().GetResult();
             if (!press.IsText)
             {
+                LastKeyPasted = press.Pasted;
                 return ConsoleKeyMap.FromKeyPress(press);
             }
 
             _typed = press.Text;
             _typedIndex = 0;
+            _typedPasted = press.Pasted;
         }
+
+        LastKeyPasted = _typedPasted;
 
         var character = _typed[_typedIndex++];
         if (!intercept)

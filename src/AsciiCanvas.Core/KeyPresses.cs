@@ -22,12 +22,12 @@ internal static class KeyPresses
                 {
                     if (i > 0)
                     {
-                        presses.Add(new KeyPress(Key.Enter, "", KeyModifiers.None));
+                        presses.Add(new KeyPress(Key.Enter, "", KeyModifiers.None, Pasted: true));
                     }
 
                     if (lines[i].Length > 0)
                     {
-                        presses.Add(new KeyPress(Key.Unknown, lines[i], KeyModifiers.None));
+                        presses.Add(new KeyPress(Key.Unknown, lines[i], KeyModifiers.None, Pasted: true));
                     }
                 }
 

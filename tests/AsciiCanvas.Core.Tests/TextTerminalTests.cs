@@ -193,11 +193,11 @@ public class TextTerminalTests
 
         Assert.Equal(
             [
-                new KeyPress(Key.Unknown, "ab", KeyModifiers.None),
-                new KeyPress(Key.Enter, "", KeyModifiers.None),
-                new KeyPress(Key.Enter, "", KeyModifiers.None),
-                new KeyPress(Key.Unknown, "cd", KeyModifiers.None),
-                new KeyPress(Key.Enter, "", KeyModifiers.None),
+                new KeyPress(Key.Unknown, "ab", KeyModifiers.None, Pasted: true),
+                new KeyPress(Key.Enter, "", KeyModifiers.None, Pasted: true),
+                new KeyPress(Key.Enter, "", KeyModifiers.None, Pasted: true),
+                new KeyPress(Key.Unknown, "cd", KeyModifiers.None, Pasted: true),
+                new KeyPress(Key.Enter, "", KeyModifiers.None, Pasted: true),
             ],
             presses);
     }
