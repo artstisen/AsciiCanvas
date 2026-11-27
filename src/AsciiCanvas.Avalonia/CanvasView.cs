@@ -65,6 +65,11 @@ public sealed class CanvasView : Control
     private readonly DispatcherTimer _blinkTimer = new() { Interval = TimeSpan.FromMilliseconds(530) };
 
     private (double Advance, double Height)? _fontMetrics;
+
+    // The colors of the texture, one per cell, kept until the texture, the grid, the pinned rows or the background change:
+    // the pattern costs a few sines per cell, and most renders only follow typing.
+    private uint[] _textureColors = [];
+    private (CanvasTexture? Texture, int Columns, int Rows, int PinnedRows, uint Background) _textureKey;
     private int _invalidatePending;
     private bool _blinkOn = true;
     private bool _cursorDrawn;
@@ -547,13 +552,15 @@ public sealed class CanvasView : Control
         }
 
         var renderer = new CellRenderer(_resources, context, palette, layout, FontFamily, fontSize, RenderScaling);
+        var texture = TextureColors(palette, columns, rows);
 
         using (context.PushClip(bounds))
         {
             for (var y = 0; y < rows; y++)
             {
                 var row = _frame.Row(y);
-                FillBackgrounds(renderer, palette, row, y);
+                var textureRow = texture.IsEmpty ? texture : texture.Slice(y * columns, columns);
+                FillBackgrounds(renderer, palette, row, y, textureRow);
                 renderer.DrawRow(row, y);
             }
 
@@ -595,16 +602,52 @@ public sealed class CanvasView : Control
         }
     }
 
-    private static void FillBackgrounds(CellRenderer renderer, ColorPalette palette, ReadOnlySpan<Cell> row, int y)
+    // The texture behind the cells (CellCanvas.Texture), one color per cell; empty when there is none.
+    private ReadOnlySpan<uint> TextureColors(ColorPalette palette, int columns, int rows)
     {
-        // Runs of equal background are painted as one rectangle.
+        var texture = Canvas.Texture;
+        if (texture is null)
+        {
+            return [];
+        }
+
+        var pinnedRows = texture.CoverPinnedRows ? 0 : Canvas.ScrollbackPinnedRows;
+        var key = (texture, columns, rows, pinnedRows, palette.DefaultBackground);
+        if (key == _textureKey)
+        {
+            return _textureColors;
+        }
+
+        Span<uint> shades = stackalloc uint[CanvasTexture.MaxStrength + 1];
+        for (var shade = 0; shade < shades.Length; shade++)
+        {
+            shades[shade] = texture.ColorOf(shade, palette.DefaultBackground);
+        }
+
+        var colors = new uint[columns * rows];
+        for (var y = 0; y < rows; y++)
+        {
+            for (var x = 0; x < columns; x++)
+            {
+                colors[(y * columns) + x] = y < rows - pinnedRows ? shades[texture.ShadeAt(x, y, columns)] : palette.DefaultBackground;
+            }
+        }
+
+        _textureColors = colors;
+        _textureKey = key;
+        return colors;
+    }
+
+    private static void FillBackgrounds(CellRenderer renderer, ColorPalette palette, ReadOnlySpan<Cell> row, int y, ReadOnlySpan<uint> texture)
+    {
+        // Runs of equal background are painted as one rectangle. Cells with the default background show the texture, if any.
         for (var x = 0; x < row.Length;)
         {
-            RenderResources.ResolveColors(palette, row[x].Style, out _, out var background);
+            var background = BackgroundAt(palette, row, texture, x);
             var end = x + 1;
             while (end < row.Length)
             {
-                RenderResources.ResolveColors(palette, row[end].Style, out _, out var next);
+                var next = BackgroundAt(palette, row, texture, end);
                 if (next != background)
                 {
                     break;
@@ -620,6 +663,12 @@ public sealed class CanvasView : Control
 
             x = end;
         }
+    }
+
+    private static uint BackgroundAt(ColorPalette palette, ReadOnlySpan<Cell> row, ReadOnlySpan<uint> texture, int x)
+    {
+        RenderResources.ResolveColors(palette, row[x].Style, out _, out var background);
+        return background == palette.DefaultBackground && x < texture.Length ? texture[x] : background;
     }
 
     // An event handler cannot await, so this is async void; it must not throw.

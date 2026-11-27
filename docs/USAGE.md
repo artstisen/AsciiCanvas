@@ -18,6 +18,7 @@ to build it, see the [README](../README.md). The code samples here were built an
 - A program that already uses `Console` (WriteLine, ReadLine, ReadKey, colors, cursor placement) can run on a canvas with one alias
   line in its `.csproj` and `CanvasApp.RunTerminal`; see "Porting a console program".
 - `CellCanvas` is thread-safe. The program runs on a background thread; the window runs on the UI thread.
+- `canvas.Texture` paints a still, fading texture behind the cells with the default background (see "A texture behind the cells").
 - Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time. `Frame = CanvasFrame.None`
   removes the OS title bar and border so the program draws its own (see "Windows without a frame").
 
@@ -274,6 +275,32 @@ as in a terminal:
   host shows; drawing, `GetCell` and the cursor still work on the canvas itself.
 
 Leave scrollback off (the default for `Run`) in a full-screen program that uses the wheel or Shift+PageUp itself.
+
+## A texture behind the cells
+
+`canvas.Texture` gives the window a still texture behind the cells: a frozen plasma pattern, one shade per cell, strongest at the
+right edge and fading out toward the left. It shows in every cell with the default background, so text and colored cells are drawn
+over it, and it suits a console-style program (a `TextTerminal`) that writes plain text.
+
+```csharp
+canvas.Texture = new CanvasTexture
+{
+    Tint = 0xFFFFFF,        // the color the shades are mixed toward (0xRRGGBB); white gives grays
+    Strength = 7,           // shades above the background, 1 to CanvasTexture.MaxStrength (8)
+    Fade = 60,              // percent of the width, from the right edge, that it fades out over (10 to 100)
+    Dither = true,          // a fine grain between the shades; false shows bands
+    CoverPinnedRows = true, // false leaves the bottom ScrollbackPinnedRows plain (an input line, a status line)
+};
+canvas.Texture = null;      // none (the default)
+```
+
+- **It belongs to the window, not to the cells**: it stays in place while the content scrolls and while the view is scrolled back,
+  and a change shows at once, without `Present()`. `GetCell` and the cells themselves never see it.
+- **Colors**: the shades are mixed in RGB from the palette's default background toward `Tint`, in steps of about 4 %, so they are
+  finer than the 256-color palette of the cells allows. Keep the tint bright and let `Strength` set how strong it is: 8 is a mix of
+  about 31 %.
+- **The pattern** is measured from the right edge, so a wider window shows more of it on the left. It is computed again only when
+  the grid size, the texture or the pinned rows change.
 
 A program with lines that must stay at the bottom (a status line, an input line) sets `canvas.ScrollbackPinnedRows` to their
 number. While the view is scrolled back, those rows stay where they are and the scrollback shows above them, and the cursor stays

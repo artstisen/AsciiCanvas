@@ -47,7 +47,7 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 
 ## Project conventions and overrides
 
-- **Palette is 16/256 colors only** (`CellColor`), by decision. No RGB cells.
+- **Palette is 16/256 colors only** (`CellColor`), by decision. No RGB cells. The one exception is the texture behind the cells (`CanvasTexture`, `CellCanvas.Texture`): it belongs to the window, not to the cells, and its shades are mixed in RGB from the default background toward a tint, because the palette has no dark steps of a color. The host paints it in `CanvasView.FillBackgrounds`, in cells with the default background only.
 - **One rune per cell**; East Asian wide characters and emoji take two cells (`CellWidth.WideLead` / `WideTrail`). No grapheme clusters yet.
 - **`CellCanvas` is thread-safe** (one lock, back buffer published by `Present()`); `CellGrid` is not.
 - **Expected failures are not exceptions**: out-of-range drawing is clipped, not thrown. Exceptions are for contract violations (bad arguments).

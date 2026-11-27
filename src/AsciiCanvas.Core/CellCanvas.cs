@@ -40,7 +40,8 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
 
     /// <summary>
     /// Raised after a <see cref="Present"/> that published new content, and when the view moves through the scrollback
-    /// (<see cref="ScrollbackOffset"/>, <see cref="ScrollBack"/>, <see cref="ScrollbackLimit"/>, <see cref="ClearScrollback"/>).
+    /// (<see cref="ScrollbackOffset"/>, <see cref="ScrollBack"/>, <see cref="ScrollbackLimit"/>, <see cref="ClearScrollback"/>),
+    /// and when <see cref="Texture"/> changes.
     /// It comes on the thread that made the change, so hosts should marshal to their UI thread.
     /// </summary>
     public event Action? Presented;
@@ -270,6 +271,37 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             {
                 Presented?.Invoke();
             }
+        }
+    }
+
+    /// <summary>
+    /// A still texture the host paints behind the cells that have the default background, or <see langword="null"/> (the default)
+    /// for none. It belongs to the window, not to the cells: it stays in place while the content scrolls and while the view is
+    /// scrolled back, and a change shows at once, without <see cref="Present"/>.
+    /// </summary>
+    public CanvasTexture? Texture
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                if (field == value)
+                {
+                    return;
+                }
+
+                field = value;
+            }
+
+            Presented?.Invoke();
         }
     }
 
