@@ -399,7 +399,9 @@ A `TextTerminal` can write in some of the rows only: `MarginTop` and `MarginBott
 to or scrolls. They follow the canvas when it is resized, and at least one row is always left, so `MarginTop = int.MaxValue` keeps a
 terminal on the last row. Only a terminal whose rows start at row 0 feeds the scrollback. `Pen` gives a terminal a style of its own
 (null: the canvas `Pen`), so two terminals on one canvas can write in different colors, and `Resized` is raised on the reading
-thread when a read takes a `ResizeEvent`, so the program can redraw what lies outside the terminals.
+thread when a read takes a `ResizeEvent`, so the program can redraw what lies outside the terminals. `MarginLeft` is a gutter: columns at the left that the terminal never writes to, where each line starts
+after a line break, a carriage return, `Clear` and a wrap, with the tab stops counted from it (the scrollback keeps working; text
+already written stays where it is when the margin changes).
 
 ```csharp
 var output = new TextTerminal(canvas) { MarginBottom = 2 };                  // scrolls above the last two rows

@@ -20,6 +20,57 @@ public class TerminalRegionTests
     }
 
     [Fact]
+    public void Write_WithALeftMargin_StartsEachLineAfterIt_AlsoWhereALongLineWraps()
+    {
+        using var canvas = new CellCanvas(6, 3);
+        var output = new TextTerminal(canvas) { MarginLeft = 2 };
+
+        output.WriteLine("ab");
+        output.Write("cdefgh");
+
+        Assert.Equal(["  ab  ", "  cdef", "  gh  "], Rows(canvas));
+        Assert.Equal(4, output.CursorColumn);
+    }
+
+    [Fact]
+    public void Write_WithALeftMargin_ReturnsAndTabsFromTheMargin()
+    {
+        using var canvas = new CellCanvas(12, 1);
+        var output = new TextTerminal(canvas) { MarginLeft = 1 };
+
+        // (\r goes back to the margin; the tab stop is 8 columns from it)
+        output.Write("abc\rX\tY");
+
+        Assert.Equal([" X       Y  "], Rows(canvas));
+    }
+
+    [Fact]
+    public void Clear_WithALeftMargin_PutsTheCursorAfterIt_AndTheScrollbackKeepsTheGutterBlank()
+    {
+        using var canvas = new CellCanvas(4, 2) { ScrollbackLimit = 10 };
+        var output = new TextTerminal(canvas) { MarginLeft = 1 };
+
+        output.WriteLine("a");
+        output.WriteLine("b");
+        output.WriteLine("c");
+        Assert.Equal(2, canvas.ScrollbackCount);
+        output.Clear();
+
+        Assert.Equal((1, 0), (output.CursorColumn, output.CursorRow));
+    }
+
+    [Fact]
+    public void MarginLeft_WiderThanTheCanvas_LeavesOneColumn()
+    {
+        using var canvas = new CellCanvas(3, 2);
+        var output = new TextTerminal(canvas) { MarginLeft = 10 };
+
+        output.Write("xy");
+
+        Assert.Equal(["  x", "  y"], Rows(canvas));
+    }
+
+    [Fact]
     public void WriteLine_WithATopMarginBeyondTheCanvas_StaysOnTheLastRow_AndLeavesTheRowsAbove()
     {
         using var canvas = new CellCanvas(5, 3) { ScrollbackLimit = 10 };

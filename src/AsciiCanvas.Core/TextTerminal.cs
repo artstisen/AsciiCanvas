@@ -40,6 +40,14 @@ public sealed class TextTerminal(CellCanvas canvas)
     public int MarginBottom { get; set; }
 
     /// <summary>
+    /// Columns at the left that this terminal never writes to, a gutter: every line starts after them, after a line break, a
+    /// carriage return, <see cref="Clear"/> and where a long line wraps, and tab stops are counted from there. Scrolling still
+    /// moves whole rows, so the scrollback keeps working, with the gutter blank in it. A margin that leaves no room keeps at
+    /// least one column. 0 by default. A change applies to what is written after it; text already written stays where it is.
+    /// </summary>
+    public int MarginLeft { get; set; }
+
+    /// <summary>
     /// The style of this terminal's own text, when several terminals (or other drawing) share a canvas. <see langword="null"/>
     /// (the default) writes with the canvas <see cref="CellCanvas.Pen"/>; when set, <see cref="Style"/> reads and changes this
     /// style instead of the canvas pen.
@@ -130,7 +138,7 @@ public sealed class TextTerminal(CellCanvas canvas)
     public void SetCursorPosition(int column, int row)
     {
         Constrain();
-        _column = Math.Clamp(column, 0, Canvas.Columns);
+        _column = Math.Clamp(column, RegionLeft, Canvas.Columns);
         _row = Math.Clamp(row, RegionTop, RegionBottom - 1);
         Finish();
     }
@@ -148,7 +156,7 @@ public sealed class TextTerminal(CellCanvas canvas)
             Canvas.Fill(Region, ' ', Pen);
         }
 
-        _column = 0;
+        _column = RegionLeft;
         _row = RegionTop;
         Finish();
     }
@@ -370,13 +378,15 @@ public sealed class TextTerminal(CellCanvas canvas)
                     NewLine();
                     break;
                 case '\r':
-                    _column = 0;
+                    _column = RegionLeft;
                     break;
                 case '\b':
-                    _column = Math.Max(0, _column - 1);
+                    _column = Math.Max(RegionLeft, _column - 1);
                     break;
                 case '\t':
-                    var stop = Math.Min((((_column / TabSize) + 1) * TabSize), Canvas.Columns);
+                    // (the tab stops are counted from the gutter)
+                    var left = RegionLeft;
+                    var stop = Math.Min(left + ((((_column - left) / TabSize) + 1) * TabSize), Canvas.Columns);
                     while (_column < stop)
                     {
                         PutRune(new Rune(' '));
@@ -409,7 +419,7 @@ public sealed class TextTerminal(CellCanvas canvas)
 
     private void NewLine()
     {
-        _column = 0;
+        _column = RegionLeft;
         if (_row + 1 >= RegionBottom)
         {
             Canvas.Scroll(Region, 0, -1, Pen);
@@ -435,6 +445,9 @@ public sealed class TextTerminal(CellCanvas canvas)
 
     private CellRect Region => new(0, RegionTop, Canvas.Columns, RegionBottom - RegionTop);
 
+    // The first column this terminal writes in (the gutter, with at least one column left).
+    private int RegionLeft => Math.Clamp(MarginLeft, 0, Math.Max(0, Canvas.Columns - 1));
+
     // Keeps the cursor valid if the canvas was resized behind our back: it moves up with content a shorter canvas moved up, and
     // stays in the region. A column equal to Columns is a pending wrap.
     private void Constrain()
@@ -442,7 +455,7 @@ public sealed class TextTerminal(CellCanvas canvas)
         var moved = Canvas.RowsMovedUpByResize;
         _row -= (int)Math.Min(moved - (_movedByResize ?? moved), int.MaxValue);
         _movedByResize = moved;
-        _column = Math.Clamp(_column, 0, Canvas.Columns);
+        _column = Math.Clamp(_column, RegionLeft, Canvas.Columns);
         _row = Math.Clamp(_row, RegionTop, RegionBottom - 1);
     }
 
