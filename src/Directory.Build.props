@@ -10,6 +10,18 @@
     <PackageTags>ascii;tui;terminal;text-ui;grid;canvas;console;avalonia</PackageTags>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- The public repository, in the package, and SourceLink (built into the .NET SDK for GitHub): the symbols point at the
+         source on GitHub, so a debugger steps into it -->
+    <PackageProjectUrl>https://github.com/artstisen/AsciiCanvas</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/artstisen/AsciiCanvas</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- On GitHub Actions: deterministic paths in the symbols (/_/), no path of the build machine -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>

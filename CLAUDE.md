@@ -56,7 +56,7 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 - **`CancellationToken` parameters are named `cancellationToken`**, and library awaits use `ConfigureAwait(false)`.
 - **Two fonts are embedded**: Cascadia Mono (default) and JetBrains Mono, both SIL OFL 1.1, under `src/AsciiCanvas.Avalonia/Assets/Fonts` and exposed through `CanvasFonts`. They are used through `avares://` URIs, and Avalonia resolves those families only from the embedded collection, so a wrong family name in `CanvasFonts` crashes at the first render. Keep each OFL text and `THIRD-PARTY-NOTICES.md` with the fonts; do not modify the font files.
 - **`Key` enum members are not individually documented** (CS1591 suppressed for that enum only): the member names are the key names.
-- **Packages**: `AsciiCanvas.Core` and `AsciiCanvas.Avalonia` are packable (`dotnet pack -c Release -o artifacts`); shared metadata (author, MIT license, readme, tags, snupkg symbols) is in `src/Directory.Build.props`, and `samples/Directory.Build.props` turns packing off for the samples. The version (currently 0.1.0) is one `<Version>` in the root `Directory.Build.props`, shared by the packages, samples and tests. Not published to nuget.org. The repository is private on GitHub (`https://github.com/artstisen/AsciiCanvas`); add `RepositoryUrl` and SourceLink when it becomes public. Bump `<Version>` for a release.
+- **Packages**: `AsciiCanvas.Core` and `AsciiCanvas.Avalonia` are packable (`dotnet pack -c Release -o artifacts`); shared metadata (author, MIT license, readme, tags, snupkg symbols) is in `src/Directory.Build.props`, and `samples/Directory.Build.props` turns packing off for the samples. The version (currently 0.1.0) is one `<Version>` in the root `Directory.Build.props`, shared by the packages, samples and tests. Not published to nuget.org. The repository is public on GitHub (`https://github.com/artstisen/AsciiCanvas`, since 2026-11-27): `RepositoryUrl`, `PackageProjectUrl` and SourceLink (built into the .NET SDK; `PublishRepositoryUrl`, `EmbedUntrackedSources`, and `ContinuousIntegrationBuild` on GitHub Actions) are set in `src/Directory.Build.props`. Bump `<Version>` for a release.
 - **`docs/USAGE.md` is the guide for people and agents who build on the library.** Keep it in step with the public API: when a public member, event or option is added, renamed or removed, update the guide and its samples in the same change. Samples in it were compiled against the packed packages; recompile them when you change them.
 
 ## Domain notes
@@ -86,7 +86,7 @@ dotnet jb inspectcode AsciiCanvas.slnx --no-build --format=Xml --severity=WARNIN
 
 ## Publishing safety
 
-The repository is on GitHub (private for now; it may become public, and then the whole history is public). Nothing private goes up:
+The repository is public on GitHub (since 2026-11-27): everything pushed, the whole history, is public. Nothing private goes up:
 
 - **Only the GitHub no-reply address**, `46990511+artstisen@users.noreply.github.com`, as author and committer email. Never a
   private or work address, and never write those addresses (or their domains) into files or messages. Each clone sets it with `git config user.email 46990511+artstisen@users.noreply.github.com`;
