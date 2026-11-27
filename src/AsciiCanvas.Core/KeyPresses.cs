@@ -38,6 +38,11 @@ internal static class KeyPresses
         }
     }
 
+    /// <summary>
+    /// Option (Alt) with a letter or digit types a character (macOS): the key press is left to the text that follows it
+    /// </summary>
+    private static readonly bool _optionTypesText = OperatingSystem.IsMacOS();
+
     private static bool IsActionKey(KeyEvent e)
     {
         switch (e.Key)
@@ -48,10 +53,11 @@ internal static class KeyPresses
             case >= Key.F1 and <= Key.F12:
                 return true;
             case (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9):
-                // Ctrl+Alt is how some layouts type AltGr characters, which arrive as text instead.
+                // Ctrl+Alt is how some layouts type AltGr characters, which arrive as text instead. On macOS, Option (Alt)
+                // alone types characters too (@ $ [ { on many layouts), so it is text there, not an action key.
                 var command = (e.Modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
                 var alt = (e.Modifiers & KeyModifiers.Alt) != 0;
-                return command != alt;
+                return command ? !alt : alt && !_optionTypesText;
             default:
                 return false;
         }

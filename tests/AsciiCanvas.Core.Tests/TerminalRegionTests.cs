@@ -136,6 +136,35 @@ public class TerminalRegionTests
     }
 
     [Fact]
+    public async Task ReadKeyAsync_WhenCloseIsRequested_RaisesCloseRequested_AndReadsOn()
+    {
+        using var canvas = new CellCanvas(5, 3);
+        var terminal = new TextTerminal(canvas);
+        var requested = 0;
+        terminal.CloseRequested += () => requested++;
+        canvas.Input.Post(new CloseRequestedEvent());
+        canvas.Input.Post(new TextEvent("a"));
+
+        var key = await terminal.ReadKeyAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("a", key.Text);
+        Assert.Equal(1, requested);
+    }
+
+    [Fact]
+    public void KeyAvailable_WhenCloseIsRequested_RaisesCloseRequested()
+    {
+        using var canvas = new CellCanvas(5, 3);
+        var terminal = new TextTerminal(canvas);
+        var requested = 0;
+        terminal.CloseRequested += () => requested++;
+        canvas.Input.Post(new CloseRequestedEvent());
+
+        Assert.False(terminal.KeyAvailable);
+        Assert.Equal(1, requested);
+    }
+
+    [Fact]
     public void Write_AfterACanvasMadeShorterMovedTheContentUp_ContinuesOnTheSameLine()
     {
         using var canvas = new CellCanvas(5, 6) { ScrollbackLimit = 10 };

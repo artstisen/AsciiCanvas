@@ -212,6 +212,18 @@ case CloseRequestedEvent:
 A program that sets `InterceptClose` must keep reading input, or the window cannot be closed. `canvas.Exit()` also closes the
 window when the program decides to quit by itself.
 
+A program that reads through a `TextTerminal` (`ReadKeyAsync`, `ReadLineAsync`, `In`, `KeyAvailable`) does not see the
+`CloseRequestedEvent` itself: the terminal raises `CloseRequested` when a read takes one, on the reading thread. A program that
+holds the close only while it works, and lets it go while it waits for a key, closes there:
+
+```csharp
+canvas.InterceptClose = true;                      // a close while a command runs waits for the command
+input.CloseRequested += canvas.Exit;               // a close while a key is awaited closes at once
+```
+
+A close that comes while nothing reads stays in `canvas.Input` until the next read, or until the program takes it from there
+(`canvas.Input.TryRead`) when its work is done.
+
 ### Clipboard
 
 `canvas.Clipboard` (`ICanvasClipboard`) has `GetTextAsync` and `SetTextAsync`. Pasting arrives as a `PasteEvent`; use the

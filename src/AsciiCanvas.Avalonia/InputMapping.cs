@@ -48,7 +48,14 @@ internal static class InputMapping
     /// </summary>
     public static bool ShouldHandle(Key key, KeyModifiers modifiers) =>
         key is Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down or Key.Enter or Key.Escape
-        || (!IsAltGr(modifiers) && (modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0);
+        || (!IsAltGr(modifiers) && !IsOptionText(key, modifiers) &&
+            (modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) != 0);
+
+    // On macOS, Option (Alt) alone with a letter or digit types a character (@ $ [ { on many layouts): left unhandled, so
+    // Avalonia gives the text
+    private static bool IsOptionText(Key key, KeyModifiers modifiers) =>
+        OperatingSystem.IsMacOS() && (modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == KeyModifiers.Alt &&
+        key is (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9);
 
     private static bool IsAltGr(KeyModifiers modifiers) =>
         (modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == (KeyModifiers.Control | KeyModifiers.Alt);

@@ -60,6 +60,14 @@ public sealed class TextTerminal(CellCanvas canvas)
     /// </summary>
     public event Action? Resized;
 
+    /// <summary>
+    /// Raised on the reading thread when a read of this terminal takes a <see cref="CloseRequestedEvent"/> from the input (the
+    /// user asked to close the window while <see cref="CellCanvas.InterceptClose"/> is on). A read has no key to give for it, so
+    /// without a handler the request is dropped: a program that holds the close while it works typically calls
+    /// <see cref="CellCanvas.Exit"/> here, as it waits for a key and has nothing half done.
+    /// </summary>
+    public event Action? CloseRequested;
+
     /// <summary>When true (the default), every write is presented immediately.</summary>
     public bool AutoPresent { get; set; } = true;
 
@@ -121,6 +129,10 @@ public sealed class TextTerminal(CellCanvas canvas)
                 {
                     Constrain();
                     Resized?.Invoke();
+                }
+                else if (input is CloseRequestedEvent)
+                {
+                    CloseRequested?.Invoke();
                 }
                 else
                 {
@@ -347,6 +359,12 @@ public sealed class TextTerminal(CellCanvas canvas)
                 Constrain();
                 Resized?.Invoke();
                 return null;
+            }
+
+            if (input is CloseRequestedEvent)
+            {
+                CloseRequested?.Invoke();
+                continue;
             }
 
             // Mouse input and key presses that also arrive as text add nothing, so the loop reads on.
