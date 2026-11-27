@@ -71,6 +71,21 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
             canvas.TitleChanged += title => Dispatcher.UIThread.Post(() => window.Title = title);
             canvas.Icon = options.Icon;
             canvas.IconChanged += () => Dispatcher.UIThread.Post(() => ApplyIcon(window, canvas.Icon));
+            canvas.GridSizeRequested += (columns, rows) => Dispatcher.UIThread.Post(() =>
+            {
+                // The window just large enough for the cells: back from maximized or full screen first. (Half a pixel
+                // more, so the cells counted from the window are not one fewer by a rounding of the sizes.)
+                window.WindowState = WindowState.Normal;
+                if (view.Sizing == CanvasSizing.ScaleToFit)
+                {
+                    canvas.Resize(columns, rows);
+                }
+
+                var size = view.MeasureGrid(columns, rows);
+                window.SizeToContent = SizeToContent.Manual;
+                window.Width = size.Width + 0.5;
+                window.Height = size.Height + 0.5;
+            });
             canvas.FontSize = options.FontSize;
             canvas.FontSizeChanged += size => Dispatcher.UIThread.Post(() =>
             {

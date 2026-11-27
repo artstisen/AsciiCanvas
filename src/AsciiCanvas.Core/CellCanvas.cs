@@ -58,6 +58,12 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// <summary>Raised on the calling thread after <see cref="FontSize"/> changed, with the new size. Hosts should marshal to their UI thread.</summary>
     public event Action<double>? FontSizeChanged;
 
+    /// <summary>
+    /// Raised on the calling thread when the program asks for a grid size (<see cref="RequestGridSize"/>), with the columns and
+    /// rows. Hosts should marshal to their UI thread and size the window to fit them.
+    /// </summary>
+    public event Action<int, int>? GridSizeRequested;
+
     /// <summary>Raised on the calling thread when the program sets <see cref="WindowState"/>. Hosts should marshal to their UI thread and change the window.</summary>
     public event Action<CanvasWindowState>? WindowStateRequested;
 
@@ -600,6 +606,28 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
                 field = value;
                 _changed = true;
             }
+        }
+    }
+
+    /// <summary>
+    /// Asks the host for a grid of this many columns and rows: the window is made just large enough for them at
+    /// <see cref="FontSize"/> (and brought back from maximized or full screen first). The canvas gets the new size from the
+    /// host, with a <see cref="ResizeEvent"/>, as for a window resized by hand. Without a host the canvas is resized at once.
+    /// </summary>
+    /// <param name="columns">The columns, at least 1.</param>
+    /// <param name="rows">The rows, at least 1.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The columns or the rows are less than 1.</exception>
+    public void RequestGridSize(int columns, int rows)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(rows, 1);
+        if (GridSizeRequested is { } requested)
+        {
+            requested(columns, rows);
+        }
+        else
+        {
+            Resize(columns, rows);
         }
     }
 

@@ -354,4 +354,37 @@ public class CellCanvasTests
         Assert.True(canvas.Input.TryRead(out var posted));
         Assert.Equal(new WindowStateEvent(CanvasWindowState.FullScreen), posted);
     }
+
+    [Fact]
+    public void RequestGridSize_WithAHost_AsksTheHost_AndLeavesTheCanvasToIt()
+    {
+        using var canvas = new CellCanvas(80, 25);
+        List<(int, int)> requests = [];
+        canvas.GridSizeRequested += (columns, rows) => requests.Add((columns, rows));
+
+        canvas.RequestGridSize(120, 40);
+
+        Assert.Equal([(120, 40)], requests);
+        Assert.Equal((80, 25), (canvas.Columns, canvas.Rows));
+    }
+
+    [Fact]
+    public void RequestGridSize_WithoutAHost_ResizesTheCanvas()
+    {
+        using var canvas = new CellCanvas(80, 25);
+
+        canvas.RequestGridSize(100, 30);
+
+        Assert.Equal((100, 30), (canvas.Columns, canvas.Rows));
+    }
+
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(10, 0)]
+    public void RequestGridSize_LessThanOne_Throws(int columns, int rows)
+    {
+        using var canvas = new CellCanvas(80, 25);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => canvas.RequestGridSize(columns, rows));
+    }
 }
