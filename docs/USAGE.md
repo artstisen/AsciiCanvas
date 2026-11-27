@@ -19,7 +19,8 @@ to build it, see the [README](../README.md). The code samples here were built an
   line in its `.csproj` and `CanvasApp.RunTerminal`; see "Porting a console program".
 - `CellCanvas` is thread-safe. The program runs on a background thread; the window runs on the UI thread.
 - `canvas.Texture` paints a still, fading texture behind the cells with the default background (see "A texture behind the cells").
-- Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time. `Frame = CanvasFrame.None`
+- Set `canvas.Title` and `canvas.Icon` (PNG or ICO bytes) to change the window title and icon at any time, and `canvas.FontSize`
+  to change the size of the cells. `Frame = CanvasFrame.None`
   removes the OS title bar and border so the program draws its own (see "Windows without a frame").
 
 ## Getting the packages
@@ -235,6 +236,9 @@ new CanvasAppOptions
 }
 ```
 
+- **Font size**: `canvas.FontSize = 20;` changes the size of the cells at any time, from any thread (`CanvasAppOptions.FontSize`
+  is the size at start-up). With `FillWithCells` the window keeps its size and the grid gets more or fewer columns and rows (a
+  `ResizeEvent` follows, as for a window resized); with `ScaleToFit` the cells keep filling the window.
 - **Title and icon**: `canvas.Title = "notes.txt *";` and `canvas.Icon = File.ReadAllBytes("app.png");` work at any time, from any
   thread, and the window follows. The icon is the bytes of a PNG or ICO file (also available as `CanvasAppOptions.Icon` for the
   start-up icon). Without one, the window shows the AsciiCanvas icon (a dark gray rounded square with three blue squares forming

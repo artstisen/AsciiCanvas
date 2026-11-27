@@ -55,6 +55,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// <summary>Raised on the calling thread after <see cref="Icon"/> changed. Hosts should marshal to their UI thread.</summary>
     public event Action? IconChanged;
 
+    /// <summary>Raised on the calling thread after <see cref="FontSize"/> changed, with the new size. Hosts should marshal to their UI thread.</summary>
+    public event Action<double>? FontSizeChanged;
+
     /// <summary>Raised on the calling thread when the program sets <see cref="WindowState"/>. Hosts should marshal to their UI thread and change the window.</summary>
     public event Action<CanvasWindowState>? WindowStateRequested;
 
@@ -92,6 +95,44 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// The font size of the cells, in points. Set it at any time (a setting of the program, a zoom key); the host shows the
+    /// cells at that size. With the host sizing <c>FillWithCells</c> the window keeps its size and the grid gets more or
+    /// fewer columns and rows (a <see cref="ResizeEvent"/> follows); with <c>ScaleToFit</c> the cells keep filling the window.
+    /// Starts with the size from the host's options, and is 16 for a canvas without a host.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a positive, finite number.</exception>
+    public double FontSize
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            if (!double.IsFinite(value) || value <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "The font size must be a positive number.");
+            }
+
+            bool changed;
+            lock (_gate)
+            {
+                changed = field != value;
+                field = value;
+            }
+
+            if (changed)
+            {
+                FontSizeChanged?.Invoke(value);
+            }
+        }
+    } = 16;
 
     /// <summary>
     /// The icon of the window that shows the canvas, as the bytes of an image file (PNG or ICO). Set it at any time; the host

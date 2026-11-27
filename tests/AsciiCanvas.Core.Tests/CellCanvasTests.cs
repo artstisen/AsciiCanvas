@@ -295,4 +295,32 @@ public class CellCanvasTests
 
         return sb.ToString();
     }
+
+    [Fact]
+    public void FontSize_Changed_RaisesFontSizeChangedOnlyWhenItDiffers()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        List<double> sizes = [];
+        canvas.FontSizeChanged += sizes.Add;
+
+        canvas.FontSize = 20;
+        canvas.FontSize = 20;
+        canvas.FontSize = 14.5;
+
+        Assert.Equal([20, 14.5], sizes);
+        Assert.Equal(14.5, canvas.FontSize);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void FontSize_NotAPositiveNumber_Throws(double size)
+    {
+        using var canvas = new CellCanvas(10, 2);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => canvas.FontSize = size);
+        Assert.Equal(16, canvas.FontSize);
+    }
 }

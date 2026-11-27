@@ -70,6 +70,13 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
             canvas.TitleChanged += title => Dispatcher.UIThread.Post(() => window.Title = title);
             canvas.Icon = options.Icon;
             canvas.IconChanged += () => Dispatcher.UIThread.Post(() => ApplyIcon(window, canvas.Icon));
+            canvas.FontSize = options.FontSize;
+            canvas.FontSizeChanged += size => Dispatcher.UIThread.Post(() =>
+            {
+                // The window keeps its size: the cells change, not the window (it would grow off the screen).
+                window.SizeToContent = SizeToContent.Manual;
+                view.FontSize = size;
+            });
             ApplyIcon(window, canvas.Icon);
             canvas.WindowStateRequested += state => Dispatcher.UIThread.Post(() => window.WindowState = ToWindowState(state));
             window.PropertyChanged += (_, e) =>
