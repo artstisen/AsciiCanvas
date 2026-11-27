@@ -87,6 +87,17 @@ internal sealed class CanvasHostApplication(Func<CellCanvas, Task> program, Canv
                 window.Height = size.Height + 0.5;
             });
             canvas.FontSize = options.FontSize;
+            canvas.FontNameChanged += name => Dispatcher.UIThread.Post(() =>
+            {
+                // (empty: the font of the options; a name of no embedded font is ignored. The window keeps its size)
+                if ((name.Length == 0 ? options.FontFamily ?? CanvasFonts.Default : CanvasFonts.FromName(name)) is not { } family)
+                {
+                    return;
+                }
+
+                window.SizeToContent = SizeToContent.Manual;
+                view.FontFamily = family;
+            });
             canvas.FontSizeChanged += size => Dispatcher.UIThread.Post(() =>
             {
                 // The window keeps its size: the cells change, not the window (it would grow off the screen).

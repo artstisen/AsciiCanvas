@@ -58,6 +58,9 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
     /// <summary>Raised on the calling thread after <see cref="FontSize"/> changed, with the new size. Hosts should marshal to their UI thread.</summary>
     public event Action<double>? FontSizeChanged;
 
+    /// <summary>Raised on the calling thread after <see cref="FontName"/> changed, with the new name. Hosts should marshal to their UI thread.</summary>
+    public event Action<string>? FontNameChanged;
+
     /// <summary>
     /// Raised on the calling thread when the program asks for a grid size (<see cref="RequestGridSize"/>), with the columns and
     /// rows. Hosts should marshal to their UI thread and size the window to fit them.
@@ -139,6 +142,39 @@ public sealed class CellCanvas(int columns = 80, int rows = 25) : IDisposable
             }
         }
     } = 16;
+
+    /// <summary>
+    /// The font of the cells, by name: "Cascadia Mono" or "JetBrains Mono", the fonts the Avalonia host has built in, or empty
+    /// (the default) for the font of the host's options. Set it at any time; the host shows the cells in it, and a name it does
+    /// not know is ignored. As with <see cref="FontSize"/>, the window keeps its size and the grid gets the cells that fit.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">The value is <see langword="null"/>.</exception>
+    public string FontName
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return field;
+            }
+        }
+
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            bool changed;
+            lock (_gate)
+            {
+                changed = field != value;
+                field = value;
+            }
+
+            if (changed)
+            {
+                FontNameChanged?.Invoke(value);
+            }
+        }
+    } = string.Empty;
 
     /// <summary>
     /// The icon of the window that shows the canvas, as the bytes of an image file (PNG or ICO). Set it at any time; the host

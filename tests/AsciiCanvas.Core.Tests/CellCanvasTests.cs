@@ -387,4 +387,19 @@ public class CellCanvasTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => canvas.RequestGridSize(columns, rows));
     }
+
+    [Fact]
+    public void FontName_Changed_RaisesFontNameChangedOnlyWhenItDiffers()
+    {
+        using var canvas = new CellCanvas(10, 2);
+        List<string> names = [];
+        canvas.FontNameChanged += names.Add;
+
+        canvas.FontName = "JetBrains Mono";
+        canvas.FontName = "JetBrains Mono";
+        canvas.FontName = string.Empty;
+
+        Assert.Equal(["JetBrains Mono", string.Empty], names);
+        Assert.Throws<ArgumentNullException>(() => canvas.FontName = null!);
+    }
 }

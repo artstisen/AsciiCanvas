@@ -243,6 +243,9 @@ new CanvasAppOptions
 - **Grid size**: `canvas.RequestGridSize(120, 40);` makes the window just large enough for 120 columns and 40 rows at the font
   size (from maximized or full screen, it is made normal first); the canvas gets the size from the host with a `ResizeEvent`.
   `CanvasAppOptions.Columns` and `Rows` are the size at start-up. Without a host the canvas is resized at once.
+- **Font**: `canvas.FontName = "JetBrains Mono";` switches to the other embedded font at any time (`"Cascadia Mono"` back; empty:
+  the font of the options; another name is ignored). `CanvasFonts.FromName(name)` gives the font of a name. The window keeps its
+  size, as with the font size.
 - **Font size**: `canvas.FontSize = 20;` changes the size of the cells at any time, from any thread (`CanvasAppOptions.FontSize`
   is the size at start-up). With `FillWithCells` the window keeps its size and the grid gets more or fewer columns and rows (a
   `ResizeEvent` follows, as for a window resized); with `ScaleToFit` the cells keep filling the window.

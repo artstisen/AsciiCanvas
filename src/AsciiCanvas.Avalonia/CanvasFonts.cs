@@ -21,4 +21,16 @@ public static class CanvasFonts
 
     /// <summary>The font used unless one is chosen: <see cref="CascadiaMono"/>.</summary>
     public static FontFamily Default => _cascadiaMono;
+
+    /// <summary>
+    /// An embedded font by its name ("Cascadia Mono", "JetBrains Mono", in any letter case), as <see cref="CellCanvas.FontName"/>
+    /// gives it; <see langword="null"/> for another name.
+    /// </summary>
+    /// <param name="name">The name of the font.</param>
+    public static FontFamily? FromName(string name) => name.Trim().ToUpperInvariant() switch
+    {
+        "CASCADIA MONO" => _cascadiaMono,
+        "JETBRAINS MONO" => _jetBrainsMono,
+        _ => null,
+    };
 }
